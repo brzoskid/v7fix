@@ -1,0 +1,2711 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>webOS IPTV Player – Minix NEO-U1 v7</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+  <style>
+    :root {
+      --webos-pink: #e6005c;
+      --webos-pink-glow: rgba(230, 0, 92, 0.55);
+      --catchup-blue: #0ea5e9;
+      --catchup-glow: rgba(14, 165, 233, 0.5);
+      --fav-gold: #f59e0b;
+      --glass-bg: rgba(14, 16, 22, 0.9);
+      --glass-border: rgba(255, 255, 255, 0.14);
+      --card-bg: rgba(30, 34, 44, 0.92);
+      --text-main: #f4f6f9;
+      --text-muted: #9aa4b5;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    html, body {
+      background-color: transparent;
+      color: var(--text-main);
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    body.desktop-mode {
+      background-color: #000;
+    }
+
+    #video-container {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    body.desktop-mode #video-container {
+      display: flex;
+      background: radial-gradient(circle at center, #141824 0%, #050608 100%);
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    #stream-status {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      padding: 18px 32px;
+      border-radius: 14px;
+      font-size: 17px;
+      max-width: 80vw;
+      text-align: center;
+      display: none;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .spinner {
+      width: 22px;
+      height: 22px;
+      flex-shrink: 0;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top-color: var(--webos-pink);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #osd-toast {
+      position: fixed;
+      top: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 60;
+      background: rgba(15, 17, 23, 0.94);
+      border: 2px solid var(--webos-pink);
+      box-shadow: 0 0 22px var(--webos-pink-glow);
+      padding: 10px 24px;
+      border-radius: 999px;
+      font-size: 16px;
+      font-weight: 700;
+      display: none;
+    }
+
+    #top-right-hud {
+      position: fixed;
+      top: 32px;
+      right: 44px;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    #clock-pill {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 18px;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    #clock-pill.visible {
+      opacity: 1;
+    }
+
+    #channel-number-osd {
+      background: rgba(15, 17, 22, 0.92);
+      border: 2px solid var(--webos-pink);
+      box-shadow: 0 0 24px var(--webos-pink-glow);
+      padding: 10px 26px;
+      border-radius: 16px;
+      font-size: 42px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      display: none;
+    }
+
+    #bottom-info-bar {
+      position: fixed;
+      left: 44px;
+      right: 44px;
+      bottom: 34px;
+      z-index: 22;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-left: 6px solid var(--webos-pink);
+      border-radius: 18px;
+      padding: 20px 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.78);
+      transform: translateY(150%);
+      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease;
+    }
+
+    #bottom-info-bar.visible {
+      transform: translateY(0);
+    }
+
+    #bottom-info-bar.catchup-mode {
+      border-left-color: var(--catchup-blue);
+    }
+
+    .bottom-bar-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+    }
+
+    .bottom-bar-ch {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .banner-ch-num {
+      background: var(--webos-pink);
+      color: #fff;
+      font-weight: 800;
+      font-size: 19px;
+      padding: 4px 12px;
+      border-radius: 8px;
+    }
+
+    .banner-ch-name {
+      font-size: 24px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .banner-fav-star {
+      color: var(--fav-gold);
+      font-size: 22px;
+      display: none;
+    }
+
+    .banner-fav-star.visible {
+      display: inline;
+    }
+
+    .banner-badges-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .aspect-badge {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #e2e8f0;
+    }
+
+    .banner-mode-badge {
+      font-size: 12px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      background: rgba(230, 0, 92, 0.22);
+      color: #ff4d94;
+      border: 1px solid var(--webos-pink);
+      white-space: nowrap;
+    }
+
+    #bottom-info-bar.catchup-mode .banner-mode-badge {
+      background: rgba(14, 165, 233, 0.22);
+      color: #38bdf8;
+      border-color: var(--catchup-blue);
+    }
+
+    .bottom-bar-epg-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 20px;
+      margin-bottom: 10px;
+    }
+
+    .banner-epg-now {
+      font-size: 17px;
+      color: #fff;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .banner-epg-next {
+      font-size: 14px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      max-width: 42%;
+    }
+
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .progress-time-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      min-width: 44px;
+    }
+
+    .progress-time-label.end {
+      text-align: right;
+    }
+
+    .progress-track {
+      flex: 1;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--webos-pink);
+      width: 45%;
+      border-radius: 99px;
+      transition: width 0.4s ease;
+    }
+
+    #bottom-info-bar.catchup-mode .progress-fill {
+      background: var(--catchup-blue);
+    }
+
+    #launcher-bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      background: linear-gradient(to top, rgba(8, 10, 14, 0.98) 0%, rgba(16, 19, 27, 0.93) 82%, rgba(16, 19, 27, 0) 100%);
+      padding: 40px 44px 30px 44px;
+      transform: translateY(105%);
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    #launcher-bar.visible {
+      transform: translateY(0);
+    }
+
+    #category-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .cat-pill {
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.09);
+      border: 1px solid transparent;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .cat-pill.fav-tab {
+      color: #fbbf24;
+    }
+
+    .cat-pill.active {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    .cat-pill.focused {
+      border-color: var(--webos-pink);
+      background: var(--webos-pink);
+      color: #fff;
+      box-shadow: 0 0 18px var(--webos-pink-glow);
+      transform: scale(1.05);
+    }
+
+    #cards-viewport {
+      width: 100%;
+      overflow: hidden;
+      padding: 14px 4px;
+    }
+
+    #cards-track {
+      display: flex;
+      gap: 18px;
+      transition: transform 0.26s cubic-bezier(0.25, 1, 0.5, 1);
+      will-change: transform;
+    }
+
+    .channel-card {
+      flex: 0 0 245px;
+      height: 152px;
+      background: var(--card-bg);
+      border: 2px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .channel-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 18px;
+      right: 18px;
+      height: 4px;
+      border-radius: 0 0 4px 4px;
+      background: var(--card-accent, #3b82f6);
+      opacity: 0.85;
+    }
+
+    .channel-card.playing {
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .channel-card.focused {
+      transform: scale(1.08) translateY(-6px);
+      border-color: var(--webos-pink);
+      background: rgba(45, 50, 64, 0.97);
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.7), 0 0 22px var(--webos-pink-glow);
+      z-index: 2;
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-num {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .channel-card.focused .card-num {
+      color: var(--webos-pink);
+    }
+
+    .fav-star-btn {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.22);
+      cursor: pointer;
+      transition: transform 0.15s ease, color 0.15s ease;
+    }
+
+    .fav-star-btn.is-fav {
+      color: var(--fav-gold);
+      text-shadow: 0 0 8px rgba(245, 158, 11, 0.65);
+    }
+
+    .card-badges {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .catchup-tag {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: rgba(14, 165, 233, 0.25);
+      color: #38bdf8;
+      border: 1px solid rgba(14, 165, 233, 0.5);
+    }
+
+    .card-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.12);
+      text-transform: uppercase;
+      max-width: 105px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 4px;
+    }
+
+    .card-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-mini-progress {
+      width: 100%;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .card-mini-fill {
+      height: 100%;
+      background: var(--webos-pink);
+    }
+
+    #epg-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 640px;
+      z-index: 40;
+      background: rgba(12, 14, 20, 0.97);
+      border-left: 1px solid var(--glass-border);
+      padding: 28px 28px;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(105%);
+      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow: -20px 0 50px rgba(0, 0, 0, 0.85);
+    }
+
+    #epg-drawer.visible {
+      transform: translateX(0);
+    }
+
+    .epg-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--glass-border);
+      margin-bottom: 14px;
+    }
+
+    .epg-ch-title {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .epg-ch-subtitle {
+      font-size: 13px;
+      color: var(--catchup-blue);
+      margin-top: 3px;
+    }
+
+    .epg-day-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .epg-day-pill {
+      padding: 7px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    .epg-day-pill.active {
+      background: var(--catchup-blue);
+      color: #fff;
+      box-shadow: 0 0 12px var(--catchup-glow);
+    }
+
+    #epg-program-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      padding-right: 4px;
+    }
+
+    .epg-item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 2px solid transparent;
+      border-radius: 12px;
+      padding: 13px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .epg-item.focused {
+      background: rgba(255, 255, 255, 0.11);
+      border-color: var(--webos-pink);
+      box-shadow: 0 0 16px var(--webos-pink-glow);
+    }
+
+    .epg-item.past.focused {
+      border-color: var(--catchup-blue);
+      box-shadow: 0 0 16px var(--catchup-glow);
+    }
+
+    .epg-item.live {
+      border-left: 4px solid var(--webos-pink);
+      background: rgba(230, 0, 92, 0.1);
+    }
+
+    .epg-item-left {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .epg-time {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+    }
+
+    .epg-item.live .epg-time {
+      color: #ff4d94;
+    }
+
+    .epg-item.past .epg-time {
+      color: #38bdf8;
+    }
+
+    .epg-title {
+      font-size: 15px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .epg-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .epg-action-badge {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 5px 10px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    .badge-replay {
+      background: var(--catchup-blue);
+      color: #fff;
+    }
+
+    .badge-live {
+      background: var(--webos-pink);
+      color: #fff;
+    }
+
+    .badge-future {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+    }
+
+    #av-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      background: rgba(5, 7, 10, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #av-modal.visible {
+      display: flex;
+    }
+
+    .av-box {
+      width: 620px;
+      max-height: 86vh;
+      overflow-y: auto;
+      background: #151821;
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 26px 30px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
+    }
+
+    .av-box h2 {
+      font-size: 21px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .av-section-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--text-muted);
+      margin: 16px 0 8px 0;
+    }
+
+    .av-option-item {
+      padding: 12px 16px;
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid transparent;
+      margin-bottom: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .av-option-item.selected {
+      background: rgba(230, 0, 92, 0.16);
+      color: #fff;
+    }
+
+    .av-option-item.focused {
+      border-color: var(--webos-pink);
+      box-shadow: 0 0 16px var(--webos-pink-glow);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    #settings-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(5, 7, 10, 0.88);
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #settings-modal.visible {
+      display: flex;
+    }
+
+    .modal-box {
+      width: 780px;
+      max-height: 92vh;
+      overflow-y: auto;
+      background: #151821;
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 26px 30px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
+    }
+
+    .modal-box h2 {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .modal-box p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      line-height: 1.45;
+    }
+
+    .builtin-epg-panel {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+    }
+
+    .builtin-epg-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .builtin-epg-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .epg-source-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .epg-source-row:last-child {
+      border-bottom: none;
+    }
+
+    .epg-source-url {
+      font-family: monospace;
+      color: #cbd5e1;
+    }
+
+    .toggle-btn {
+      padding: 5px 14px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .toggle-btn.on {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border-color: #10b981;
+    }
+
+    .toggle-btn.off {
+      background: rgba(239, 68, 68, 0.16);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.45);
+    }
+
+    .input-group {
+      margin-bottom: 14px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #d1d5db;
+      margin-bottom: 5px;
+    }
+
+    .input-group input[type="text"],
+    .input-group textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      background: #0d0f14;
+      color: #fff;
+      font-size: 13px;
+      font-family: monospace;
+      outline: none;
+      resize: vertical;
+      user-select: text;
+    }
+
+    .input-group input[type="file"] {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px dashed rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .epg-stats-pill {
+      display: inline-block;
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 8px;
+      background: rgba(14, 165, 233, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      margin-bottom: 12px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .btn.primary {
+      background: var(--webos-pink);
+    }
+
+    /* Górna podpowiedź pilota z płynnym zanikaniem po kilku sekundach */
+    #controls-hint {
+      position: fixed;
+      top: 32px;
+      left: 44px;
+      z-index: 15;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+      background: rgba(14, 16, 22, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 8px 16px;
+      border-radius: 10px;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(-16px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+
+    #controls-hint.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="video-container">
+    <video id="video-player" autoplay playsinline></video>
+  </div>
+
+  <div id="stream-status">
+    <div class="spinner"></div>
+    <span id="status-text">Łączenie ze strumieniem...</span>
+  </div>
+
+  <div id="osd-toast">Proporcje: Dopasuj</div>
+
+  <div id="controls-hint">
+    Pilot MINIX: <b>OK</b> = Kanały &nbsp;|&nbsp; <b>Prawo / ↻</b> = EPG &nbsp;|&nbsp; <b>F</b> = ★ Ulubione &nbsp;|&nbsp; <b>≡ Menu</b> = Ustawienia &nbsp;|&nbsp; <b>◫</b> = Proporcje &nbsp;|&nbsp; <b>←</b> = Audio/Opcje
+  </div>
+
+  <div id="top-right-hud">
+    <div id="clock-pill">12:00</div>
+    <div id="channel-number-osd"></div>
+  </div>
+
+  <div id="bottom-info-bar">
+    <div class="bottom-bar-top">
+      <div class="bottom-bar-ch">
+        <span class="banner-ch-num" id="banner-num">1</span>
+        <span class="banner-fav-star" id="banner-fav-star">★</span>
+        <span class="banner-ch-name" id="banner-name">Nazwa Kanału</span>
+      </div>
+      <div class="banner-badges-right">
+        <span class="aspect-badge" id="banner-aspect">Dopasuj</span>
+        <span class="banner-mode-badge" id="banner-mode">● NA ŻYWO</span>
+      </div>
+    </div>
+    <div class="bottom-bar-epg-row">
+      <div class="banner-epg-now" id="banner-epg-now">Teraz: Transmisja na żywo</div>
+      <div class="banner-epg-next" id="banner-epg-next">Następnie: Kolejny program</div>
+    </div>
+    <div class="progress-row">
+      <span class="progress-time-label" id="banner-time-start">--:--</span>
+      <div class="progress-track">
+        <div class="progress-fill" id="banner-progress"></div>
+      </div>
+      <span class="progress-time-label end" id="banner-time-stop">--:--</span>
+    </div>
+  </div>
+
+  <div id="launcher-bar">
+    <div id="category-tabs"></div>
+    <div id="cards-viewport">
+      <div id="cards-track"></div>
+    </div>
+  </div>
+
+  <div id="epg-drawer">
+    <div class="epg-header">
+      <div>
+        <div class="epg-ch-title" id="epg-drawer-title">Program TV (EPG)</div>
+        <div class="epg-ch-subtitle" id="epg-drawer-catchup-info">Archiwum do 7 dni wstecz</div>
+      </div>
+      <button class="btn" id="btn-close-epg">ESC</button>
+    </div>
+    <div class="epg-day-tabs" id="epg-day-tabs"></div>
+    <div id="epg-program-list"></div>
+  </div>
+
+  <div id="av-modal">
+    <div class="av-box">
+      <h2>
+        <span>Opcje Kanału, Dźwięk i Obraz</span>
+        <button class="btn" id="btn-close-av">ESC</button>
+      </h2>
+      <div id="av-options-container"></div>
+    </div>
+  </div>
+
+  <div id="settings-modal">
+    <div class="modal-box">
+      <h2>Źródła Listy M3U oraz Przewodnika EPG (XMLTV)</h2>
+      <p>Gdy wbudowane EPG (epg.ovh) jest <b>WYŁĄCZONE</b> (lub brak wpisu dla stacji), aplikacja automatycznie korzysta z <b>EPG / metadanych samej listy IPTV</b>. Dekoder FFmpeg obsługuje ścieżki AC3 oraz MP2/MPG.</p>
+
+      <div class="epg-stats-pill" id="epg-db-stats">Załadowane kanały w bazie EPG: 0</div>
+
+      <div class="builtin-epg-panel">
+        <div class="builtin-epg-header">
+          <span class="builtin-epg-title">Zewnętrzne EPG (epg.ovh) — po wyłączeniu działa EPG z listy IPTV</span>
+          <button class="toggle-btn on" id="btn-toggle-all-builtin">WŁĄCZONE</button>
+        </div>
+        <div id="builtin-epg-list"></div>
+      </div>
+
+      <div class="input-group">
+        <label for="m3u-url-input">Adres URL listy M3U / M3U8 (możesz zmienić na dowolny inny):</label>
+        <input type="text" id="m3u-url-input" placeholder="http://twoj-serwer/lista.m3u" />
+      </div>
+
+      <div class="input-group">
+        <label for="m3u-file-input">Lub wgraj plik(i) .m3u z dysku:</label>
+        <input type="file" id="m3u-file-input" accept=".m3u,.m3u8,.txt" multiple />
+      </div>
+
+      <div class="input-group">
+        <label for="epg-urls-textarea">Dodatkowe własne adresy URL EPG XMLTV (każdy w nowej linii):</label>
+        <textarea id="epg-urls-textarea" rows="2" placeholder="http://dodatkowy-serwer/epg.xml"></textarea>
+      </div>
+
+      <div class="input-group">
+        <label for="epg-file-input">Lub wgraj lokalne pliki EPG (.xml) naraz z dysku:</label>
+        <input type="file" id="epg-file-input" accept=".xml" multiple />
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" id="btn-clear-epg">Wyczyść pamięć EPG</button>
+        <button class="btn" id="btn-restore-default-m3u">Przywróć domyślny URL M3U</button>
+        <button class="btn" id="btn-close-modal">Zamknij (ESC)</button>
+        <button class="btn primary" id="btn-load-url">Zapisz i pobierz aktywne źródła</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const isNativeAndroid = Boolean(window.AndroidPlayer);
+    if (!isNativeAndroid) {
+      document.body.classList.add("desktop-mode");
+    }
+
+    document.addEventListener("focusin", (e) => {
+      const isText = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
+      if (isNativeAndroid && window.AndroidPlayer.setInputFocused) {
+        window.AndroidPlayer.setInputFocused(Boolean(isText));
+      }
+    });
+    document.addEventListener("focusout", () => {
+      if (isNativeAndroid && window.AndroidPlayer.setInputFocused) {
+        window.AndroidPlayer.setInputFocused(false);
+      }
+    });
+
+    const pendingNativeFetches = new Map();
+    let nativeFetchCounter = 0;
+
+    function decodeBase64Utf8(b64) {
+      const binaryStr = atob(b64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+
+    window.__onNativeFetchSuccess = function(reqId, b64Data) {
+      const entry = pendingNativeFetches.get(reqId);
+      if (entry) {
+        pendingNativeFetches.delete(reqId);
+        try {
+          entry.resolve(decodeBase64Utf8(b64Data));
+        } catch (e) {
+          entry.reject(e);
+        }
+      }
+    };
+
+    window.__onNativeFetchError = function(reqId, errMsg) {
+      const entry = pendingNativeFetches.get(reqId);
+      if (entry) {
+        pendingNativeFetches.delete(reqId);
+        entry.reject(new Error(errMsg));
+      }
+    };
+
+    async function smartFetchText(url) {
+      if (isNativeAndroid && window.AndroidPlayer.fetchUrlAsync) {
+        return new Promise((resolve, reject) => {
+          const reqId = "req_" + (++nativeFetchCounter);
+          pendingNativeFetches.set(reqId, { resolve, reject });
+          window.AndroidPlayer.fetchUrlAsync(reqId, url);
+        });
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return await res.text();
+    }
+
+    const ACCENT_PALETTE = ["#e6005c", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"];
+    const SEVEN_DAYS_MS = 7 * 24 * 3600 * 1000;
+
+    const DEFAULT_M3U_URL = "https://hls.gd/pl/81/8fehsacnmhby7/playlist.m3u8";
+
+    const DEFAULT_BUILTIN_EPG = [
+      { id: "pl", label: "1. Polska Podstawowa", url: "https://epg.ovh/pl.xml", enabled: true },
+      { id: "pltv", label: "2. Polska TV Pełna", url: "https://epg.ovh/pltv.xml", enabled: true },
+      { id: "plar", label: "3. Polska Archiwum / Dodatkowe", url: "https://epg.ovh/plar.xml", enabled: true }
+    ];
+
+    const ASPECT_MODES = [
+      { id: "fit", label: "Dopasuj (Oryginał)" },
+      { id: "fill", label: "Rozciągnij 16:9" },
+      { id: "zoom", label: "Powiększ (Zoom)" }
+    ];
+    let currentAspectIdx = 0;
+
+    const FALLBACK_CHANNELS = [
+      {
+        num: 1, name: "Big Buck Bunny (Test HTTP)", tvgId: "bbb.test", group: "Test",
+        url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+        catchup: "", catchupDays: 0, catchupSource: "", iptvEpgTitle: "Testowy strumień HTTP",
+        color: "#3b82f6"
+      }
+    ];
+
+    let builtinEpgSources = [];
+    let builtinEpgGlobalEnabled = true;
+
+    let allChannels = [];
+    let favoriteChannelKeys = new Set(); // Przechowuje nazwy lub tvgId ulubionych kanałów
+    let playlistEmbeddedEpgUrls = []; // Adresy url-tvg / x-tvg-url wyciągnięte z nagłówka #EXTM3U
+    let epgDatabase = {};
+    let categories = [];
+    let activeCategoryIndex = 0;
+    let filteredChannels = [];
+    let currentPlayingIndex = 0;
+    let currentPlayMode = "live";
+    let currentCatchupProgram = null;
+
+    let focusedCardIndex = 0;
+    let focusZone = "cards";
+    let isLauncherOpen = false;
+    let isEpgOpen = false;
+    let isAvModalOpen = false;
+    let isModalOpen = false;
+
+    let avFlatOptions = [];
+    let avFocusedIndex = 0;
+
+    let epgSelectedChannel = null;
+    let epgDaysList = [];
+    let epgSelectedDayIndex = 0;
+    let epgDayPrograms = [];
+    let epgFocusedProgramIndex = 0;
+
+    let hlsInstance = null;
+    let bannerTimeout = null;
+    let launcherTimeout = null;
+    let hintTimeout = null;
+    let toastTimeout = null;
+    let digitBuffer = "";
+    let digitTimeout = null;
+
+    const videoEl = document.getElementById("video-player");
+    const statusEl = document.getElementById("stream-status");
+    const statusText = document.getElementById("status-text");
+    const launcherEl = document.getElementById("launcher-bar");
+    const catTabsEl = document.getElementById("category-tabs");
+    const cardsTrackEl = document.getElementById("cards-track");
+    const bottomInfoBarEl = document.getElementById("bottom-info-bar");
+    const clockEl = document.getElementById("clock-pill");
+    const numOsdEl = document.getElementById("channel-number-osd");
+    const controlsHintEl = document.getElementById("controls-hint");
+    const epgDrawerEl = document.getElementById("epg-drawer");
+    const avModalEl = document.getElementById("av-modal");
+    const modalEl = document.getElementById("settings-modal");
+
+    window.onNativePlayerReady = () => hideStatus();
+    window.onNativePlayerBuffering = () => showStatus("Buforowanie strumienia (ExoPlayer)...");
+    window.onNativePlayerError = () => showStatus("Błąd odtwarzania strumienia w ExoPlayerze", false);
+
+    function showControlsHint(durationMs = 5200) {
+      if (!controlsHintEl) return;
+      controlsHintEl.classList.add("visible");
+      clearTimeout(hintTimeout);
+      hintTimeout = setTimeout(() => {
+        controlsHintEl.classList.remove("visible");
+      }, durationMs);
+    }
+
+    function normalizeChannelName(name) {
+      return (name || "")
+        .toLowerCase()
+        .replace(/\b(hd|fhd|uhd|4k|sd|pl|vip|raw|50fps)\b/g, "")
+        .replace(/[^a-z0-9ąćęłńóśźż]+/g, " ")
+        .trim();
+    }
+
+    // ================= ULUBIONE KANAŁY =================
+    function getChannelFavKey(ch) {
+      return (ch.name || "").trim().toLowerCase();
+    }
+
+    function isChannelFavorite(ch) {
+      if (!ch) return false;
+      return favoriteChannelKeys.has(getChannelFavKey(ch));
+    }
+
+    function loadFavorites() {
+      const saved = localStorage.getItem("webos_iptv_favorites_v7");
+      if (saved) {
+        try {
+          const arr = JSON.parse(saved);
+          favoriteChannelKeys = new Set(arr);
+        } catch (e) {
+          favoriteChannelKeys = new Set();
+        }
+      }
+    }
+
+    function saveFavorites() {
+      localStorage.setItem("webos_iptv_favorites_v7", JSON.stringify(Array.from(favoriteChannelKeys)));
+    }
+
+    function toggleChannelFavorite(ch) {
+      if (!ch) return;
+      const key = getChannelFavKey(ch);
+      if (favoriteChannelKeys.has(key)) {
+        favoriteChannelKeys.delete(key);
+        showOsdToast(`Usunięto z Ulubionych: ${ch.name}`);
+      } else {
+        favoriteChannelKeys.add(key);
+        showOsdToast(`★ Dodano do Ulubionych: ${ch.name}`);
+      }
+      saveFavorites();
+      rebuildCategories();
+      if (categories[activeCategoryIndex] === "★ Ulubione") {
+        filterChannelsByCategory(activeCategoryIndex);
+      } else {
+        renderCards();
+      }
+      if (allChannels[currentPlayingIndex] && allChannels[currentPlayingIndex].num === ch.num) {
+        updateBottomBarContent(ch);
+      }
+    }
+
+    // ================= KONFIGURACJA EPG (ZEWNĘTRZNE + EPG Z LISTY IPTV) =================
+    function loadBuiltinEpgConfig() {
+      const savedGlobal = localStorage.getItem("webos_iptv_builtin_global_v7");
+      builtinEpgGlobalEnabled = savedGlobal === null ? true : savedGlobal === "true";
+
+      const savedSources = localStorage.getItem("webos_iptv_builtin_sources_v7");
+      if (savedSources) {
+        try {
+          builtinEpgSources = JSON.parse(savedSources);
+        } catch (e) {
+          builtinEpgSources = JSON.parse(JSON.stringify(DEFAULT_BUILTIN_EPG));
+        }
+      } else {
+        builtinEpgSources = JSON.parse(JSON.stringify(DEFAULT_BUILTIN_EPG));
+      }
+      renderBuiltinEpgControls();
+    }
+
+    function saveBuiltinEpgConfig() {
+      localStorage.setItem("webos_iptv_builtin_global_v7", String(builtinEpgGlobalEnabled));
+      localStorage.setItem("webos_iptv_builtin_sources_v7", JSON.stringify(builtinEpgSources));
+      renderBuiltinEpgControls();
+    }
+
+    function renderBuiltinEpgControls() {
+      const globalBtn = document.getElementById("btn-toggle-all-builtin");
+      globalBtn.textContent = builtinEpgGlobalEnabled ? "WŁĄCZONE" : "WYŁĄCZONE";
+      globalBtn.className = "toggle-btn " + (builtinEpgGlobalEnabled ? "on" : "off");
+
+      const listEl = document.getElementById("builtin-epg-list");
+      listEl.innerHTML = "";
+
+      builtinEpgSources.forEach((src, idx) => {
+        const isActive = builtinEpgGlobalEnabled && src.enabled;
+        const row = document.createElement("div");
+        row.className = "epg-source-row";
+        row.innerHTML = `
+          <div>
+            <div style="font-weight: 600; color: ${isActive ? '#fff' : '#64748b'};">${src.label}</div>
+            <div class="epg-source-url">${src.url}</div>
+          </div>
+          <button class="toggle-btn ${isActive ? 'on' : 'off'}" data-idx="${idx}">
+            ${isActive ? "WŁĄCZ" : "WYŁĄCZ"}
+          </button>
+        `;
+        row.querySelector("button").onclick = () => {
+          if (!builtinEpgGlobalEnabled) {
+            builtinEpgGlobalEnabled = true;
+            builtinEpgSources[idx].enabled = true;
+          } else {
+            builtinEpgSources[idx].enabled = !builtinEpgSources[idx].enabled;
+          }
+          saveBuiltinEpgConfig();
+        };
+        listEl.appendChild(row);
+      });
+    }
+
+    document.getElementById("btn-toggle-all-builtin").onclick = async () => {
+      builtinEpgGlobalEnabled = !builtinEpgGlobalEnabled;
+      saveBuiltinEpgConfig();
+      if (!builtinEpgGlobalEnabled) {
+        epgDatabase = {};
+        localStorage.removeItem("webos_iptv_epg_v7");
+        updateEpgStatsUI();
+        // Jeśli lista M3U miała własny atrybut url-tvg / x-tvg-url lub zdefiniowane EPG dostawcy hls.gd, pobieramy je automatycznie
+        if (playlistEmbeddedEpgUrls.length > 0) {
+          showOsdToast("Przełączono na EPG z listy IPTV...");
+          await fetchAndMergeActiveEpgSources(false);
+        } else {
+          renderCards();
+          if (allChannels[currentPlayingIndex]) updateBottomBarContent(allChannels[currentPlayingIndex]);
+          showOsdToast("Zewnętrzne EPG WYŁĄCZONE — aktywne metadane z listy IPTV");
+        }
+      } else {
+        showOsdToast("Zewnętrzne EPG: WŁĄCZONE");
+      }
+    };
+
+    async function fetchAndMergeActiveEpgSources(showProgress = true) {
+      const urlsToFetch = [];
+
+      if (builtinEpgGlobalEnabled) {
+        builtinEpgSources.forEach(src => {
+          if (src.enabled && src.url) urlsToFetch.push(src.url);
+        });
+      } else if (playlistEmbeddedEpgUrls.length > 0) {
+        // Gdy zewnętrzne EPG jest wyłączone, pobieramy XMLTV osadzone w nagłówku listy M3U (url-tvg / x-tvg-url)
+        playlistEmbeddedEpgUrls.forEach(u => urlsToFetch.push(u));
+      }
+
+      const rawCustomUrls = document.getElementById("epg-urls-textarea").value.trim();
+      localStorage.setItem("webos_iptv_epg_urls_v7", rawCustomUrls);
+      rawCustomUrls.split(/\r?\n/).forEach(u => {
+        const clean = u.trim();
+        if (clean) urlsToFetch.push(clean);
+      });
+
+      if (urlsToFetch.length === 0) {
+        if (showProgress) hideStatus();
+        return;
+      }
+
+      for (let i = 0; i < urlsToFetch.length; i++) {
+        if (showProgress) {
+          showStatus(`Pobieranie EPG (${i + 1}/${urlsToFetch.length}): ${urlsToFetch[i].split('/').pop()}...`);
+        }
+        try {
+          const xmlText = await smartFetchText(urlsToFetch[i]);
+          if (xmlText) {
+            mergeXmltvIntoDatabase(xmlText);
+          }
+        } catch (err) {
+          console.warn("Błąd pobierania EPG:", urlsToFetch[i], err);
+        }
+      }
+
+      saveEpgToStorageSafe();
+      updateEpgStatsUI();
+      renderCards();
+      if (allChannels[currentPlayingIndex]) {
+        updateBottomBarContent(allChannels[currentPlayingIndex]);
+      }
+      if (showProgress) hideStatus();
+    }
+
+    async function loadM3uFromUrl(url, showProgress = true) {
+      if (!url) return false;
+      try {
+        if (showProgress) showStatus("Pobieranie listy kanałów IPTV...");
+        const text = await smartFetchText(url);
+        const channels = parseM3U(text, 1);
+        if (channels.length > 0) {
+          allChannels = channels;
+          localStorage.setItem("webos_iptv_channels_v7", JSON.stringify(allChannels));
+          return true;
+        }
+      } catch (e) {
+        console.warn("Błąd pobierania M3U:", e);
+        if (showProgress) {
+          showStatus("Błąd pobierania listy M3U: " + e.message, false);
+          await new Promise(r => setTimeout(r, 2500));
+        }
+      } finally {
+        if (showProgress) hideStatus();
+      }
+      return false;
+    }
+
+    async function init() {
+      loadFavorites();
+      loadBuiltinEpgConfig();
+
+      const savedM3uUrl = localStorage.getItem("webos_iptv_m3u_url_v7");
+      const activeM3uUrl = savedM3uUrl !== null ? savedM3uUrl : DEFAULT_M3U_URL;
+      document.getElementById("m3u-url-input").value = activeM3uUrl;
+
+      const savedEpgUrls = localStorage.getItem("webos_iptv_epg_urls_v7");
+      if (savedEpgUrls) document.getElementById("epg-urls-textarea").value = savedEpgUrls;
+
+      const savedEpg = localStorage.getItem("webos_iptv_epg_v7");
+      if (savedEpg) {
+        try { epgDatabase = JSON.parse(savedEpg); } catch (e) { epgDatabase = {}; }
+      }
+
+      const savedChannels = localStorage.getItem("webos_iptv_channels_v7");
+      if (savedChannels) {
+        try { allChannels = JSON.parse(savedChannels); } catch (e) { allChannels = []; }
+      }
+
+      if (activeM3uUrl) {
+        const fetchedOk = await loadM3uFromUrl(activeM3uUrl, true);
+        if (!fetchedOk && allChannels.length === 0) {
+          allChannels = [...FALLBACK_CHANNELS];
+        }
+      } else if (allChannels.length === 0) {
+        allChannels = [...FALLBACK_CHANNELS];
+      }
+
+      updateEpgStatsUI();
+      rebuildCategories();
+      filterChannelsByCategory(0);
+      updateClock();
+      setInterval(() => {
+        updateClock();
+        if (bottomInfoBarEl.classList.contains("visible") && allChannels[currentPlayingIndex]) {
+          updateBottomBarContent(allChannels[currentPlayingIndex]);
+        }
+      }, 15000);
+
+      showControlsHint(6000);
+
+      if (allChannels.length > 0) {
+        const lastChNum = parseInt(localStorage.getItem("webos_iptv_last_ch_num") || "0", 10);
+        const startIdx = allChannels.findIndex(c => c.num === lastChNum);
+        playLiveChannel(startIdx !== -1 ? startIdx : 0);
+      }
+
+      if (Object.keys(epgDatabase).length === 0) {
+        fetchAndMergeActiveEpgSources(false);
+      }
+    }
+
+    window.showOsdToast = function(text) {
+      const toast = document.getElementById("osd-toast");
+      toast.textContent = text;
+      toast.style.display = "block";
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.style.display = "none";
+      }, 2400);
+    };
+
+    function cycleAspectRatio() {
+      currentAspectIdx = (currentAspectIdx + 1) % ASPECT_MODES.length;
+      const modeObj = ASPECT_MODES[currentAspectIdx];
+      applyAspectRatioMode(modeObj.id);
+      showOsdToast(`Proporcje obrazu: ${modeObj.label}`);
+    }
+
+    function applyAspectRatioMode(modeId) {
+      const idx = ASPECT_MODES.findIndex(m => m.id === modeId);
+      if (idx !== -1) currentAspectIdx = idx;
+      const modeObj = ASPECT_MODES[currentAspectIdx];
+
+      document.getElementById("banner-aspect").textContent = modeObj.label;
+
+      if (isNativeAndroid && window.AndroidPlayer.setAspectRatio) {
+        window.AndroidPlayer.setAspectRatio(modeObj.id);
+      } else {
+        if (modeObj.id === "fill") videoEl.style.objectFit = "fill";
+        else if (modeObj.id === "zoom") videoEl.style.objectFit = "cover";
+        else videoEl.style.objectFit = "contain";
+      }
+    }
+
+    function openAvModal() {
+      hideLauncher();
+      hideBottomInfoBar();
+      isAvModalOpen = true;
+      avFlatOptions = [];
+      avFocusedIndex = 0;
+
+      const curCh = allChannels[currentPlayingIndex];
+      if (curCh) {
+        const isFav = isChannelFavorite(curCh);
+        avFlatOptions.push({
+          section: "Ulubione kanały",
+          type: "favorite",
+          title: isFav ? `★ Usuń „${curCh.name}” z Ulubionych` : `☆ Dodaj „${curCh.name}” do Ulubionych`,
+          selected: isFav
+        });
+      }
+
+      let tracksData = { audio: [], subtitles: [] };
+      if (isNativeAndroid && window.AndroidPlayer.getTracksJson) {
+        try {
+          tracksData = JSON.parse(window.AndroidPlayer.getTracksJson());
+        } catch (e) {}
+      }
+
+      ASPECT_MODES.forEach(m => {
+        avFlatOptions.push({
+          section: "Proporcje obrazu",
+          type: "aspect",
+          id: m.id,
+          title: m.label,
+          selected: ASPECT_MODES[currentAspectIdx].id === m.id
+        });
+      });
+
+      if (tracksData.audio && tracksData.audio.length > 0) {
+        tracksData.audio.forEach(a => {
+          avFlatOptions.push({
+            section: "Ścieżka dźwiękowa (Audio)",
+            type: "track",
+            rendererIndex: a.rendererIndex,
+            groupIndex: a.groupIndex,
+            trackIndex: a.trackIndex,
+            title: a.title,
+            selected: a.selected
+          });
+        });
+      } else {
+        avFlatOptions.push({
+          section: "Ścieżka dźwiękowa (Audio)",
+          type: "info",
+          title: "Domyślna ścieżka strumienia (FFmpeg AC3/MP2)",
+          selected: true
+        });
+      }
+
+      const subRendererIdx = tracksData.subtitles && tracksData.subtitles.length > 0
+        ? tracksData.subtitles[0].rendererIndex
+        : 2;
+      const anySubSelected = tracksData.subtitles && tracksData.subtitles.some(s => s.selected);
+
+      avFlatOptions.push({
+        section: "Napisy (Subtitles)",
+        type: "track",
+        rendererIndex: subRendererIdx,
+        groupIndex: 0,
+        trackIndex: -1,
+        title: "Wyłącz napisy",
+        selected: !anySubSelected
+      });
+
+      if (tracksData.subtitles && tracksData.subtitles.length > 0) {
+        tracksData.subtitles.forEach(s => {
+          avFlatOptions.push({
+            section: "Napisy (Subtitles)",
+            type: "track",
+            rendererIndex: s.rendererIndex,
+            groupIndex: s.groupIndex,
+            trackIndex: s.trackIndex,
+            title: s.title,
+            selected: s.selected
+          });
+        });
+      }
+
+      renderAvOptions();
+      avModalEl.classList.add("visible");
+    }
+
+    function closeAvModal() {
+      isAvModalOpen = false;
+      avModalEl.classList.remove("visible");
+    }
+
+    function renderAvOptions() {
+      const container = document.getElementById("av-options-container");
+      container.innerHTML = "";
+      let lastSection = "";
+
+      avFlatOptions.forEach((opt, idx) => {
+        if (opt.section !== lastSection) {
+          const secHeader = document.createElement("div");
+          secHeader.className = "av-section-title";
+          secHeader.textContent = opt.section;
+          container.appendChild(secHeader);
+          lastSection = opt.section;
+        }
+
+        const row = document.createElement("div");
+        row.className = "av-option-item";
+        if (opt.selected) row.classList.add("selected");
+        if (idx === avFocusedIndex) row.classList.add("focused");
+
+        row.innerHTML = `
+          <span>${opt.title}</span>
+          <span>${opt.selected ? "✔" : ""}</span>
+        `;
+
+        row.onclick = () => {
+          avFocusedIndex = idx;
+          activateAvOption(opt);
+        };
+
+        container.appendChild(row);
+      });
+    }
+
+    function activateAvOption(opt) {
+      if (opt.type === "favorite") {
+        toggleChannelFavorite(allChannels[currentPlayingIndex]);
+        openAvModal();
+      } else if (opt.type === "aspect") {
+        applyAspectRatioMode(opt.id);
+        showOsdToast(`Proporcje: ${opt.title}`);
+        openAvModal();
+      } else if (opt.type === "track") {
+        if (isNativeAndroid && window.AndroidPlayer.selectTrack) {
+          window.AndroidPlayer.selectTrack(opt.rendererIndex, opt.groupIndex, opt.trackIndex);
+        }
+        showOsdToast(`Wybrano: ${opt.title}`);
+        closeAvModal();
+      }
+    }
+
+    document.getElementById("btn-close-av").onclick = closeAvModal;
+
+    function updateEpgStatsUI() {
+      const uniqueKeys = Object.keys(epgDatabase).length;
+      document.getElementById("epg-db-stats").textContent = `Załadowane wpisy kanałów w bazie EPG: ${uniqueKeys}`;
+    }
+
+    function getChannelPrograms(ch) {
+      const keyId = (ch.tvgId || "").toLowerCase();
+      const keyName = (ch.name || "").toLowerCase();
+      const keyNorm = normalizeChannelName(ch.name);
+
+      const raw = epgDatabase[keyId] || epgDatabase[keyName] || (keyNorm ? epgDatabase[keyNorm] : null) || [];
+      const minAllowedTime = Date.now() - SEVEN_DAYS_MS;
+      return raw.filter(p => p.stop >= minAllowedTime);
+    }
+
+    function getNowAndNextEpg(ch) {
+      const now = Date.now();
+      const progs = getChannelPrograms(ch);
+      const currentIdx = progs.findIndex(p => p.start <= now && p.stop > now);
+      if (currentIdx !== -1) {
+        const cur = progs[currentIdx];
+        const nxt = progs[currentIdx + 1] || null;
+        const progress = Math.min(100, Math.max(2, Math.round(((now - cur.start) / (cur.stop - cur.start)) * 100)));
+        return { cur, nxt, progress, fromPlaylist: false };
+      }
+
+      // Fallback na informacje EPG / metadane z samej listy IPTV (#EXTINF / tvg-name / catchup)
+      if (ch.iptvEpgTitle || ch.catchupDays > 0) {
+        const fallbackTitle = ch.iptvEpgTitle
+          ? ch.iptvEpgTitle
+          : `${ch.name} (Archiwum listy IPTV: ${ch.catchupDays} dni)`;
+        return {
+          cur: { title: fallbackTitle, start: now - 1800000, stop: now + 1800000 },
+          nxt: null,
+          progress: 50,
+          fromPlaylist: true
+        };
+      }
+      return { cur: null, nxt: null, progress: 0, fromPlaylist: false };
+    }
+
+    function formatTime(ms) {
+      const d = new Date(ms);
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+
+    function formatDayLabel(dayStartMs) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((dayStartMs - today.getTime()) / (86400 * 1000));
+      const d = new Date(dayStartMs);
+      const dateShort = `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+      if (diffDays === 0) return `Dzisiaj (${dateShort})`;
+      if (diffDays === -1) return `Wczoraj (${dateShort})`;
+      if (diffDays === 1) return `Jutro (${dateShort})`;
+      if (diffDays < -1) return `${diffDays} dni (${dateShort})`;
+      return dateShort;
+    }
+
+    function updateClock() {
+      const now = new Date();
+      clockEl.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    }
+
+    function rebuildCategories() {
+      const groups = new Set(allChannels.map(ch => ch.group || "Ogólne"));
+      const favCount = allChannels.filter(ch => isChannelFavorite(ch)).length;
+      const favLabel = favCount > 0 ? `★ Ulubione (${favCount})` : "★ Ulubione";
+      categories = ["Wszystkie", favLabel, ...Array.from(groups), "🔊 Opcje / Audio", "⚙️ M3U / EPG"];
+      if (activeCategoryIndex >= categories.length) activeCategoryIndex = 0;
+      renderCategories();
+    }
+
+    function renderCategories() {
+      catTabsEl.innerHTML = "";
+      categories.forEach((cat, idx) => {
+        const pill = document.createElement("div");
+        pill.className = "cat-pill";
+        if (cat.startsWith("★ Ulubione")) pill.classList.add("fav-tab");
+        if (idx === activeCategoryIndex) pill.classList.add("active");
+        if (focusZone === "categories" && idx === activeCategoryIndex) pill.classList.add("focused");
+        pill.textContent = cat;
+        pill.onclick = () => {
+          if (cat === "⚙️ M3U / EPG") {
+            openSettingsModal();
+          } else if (cat === "🔊 Opcje / Audio") {
+            openAvModal();
+          } else {
+            activeCategoryIndex = idx;
+            focusZone = "cards";
+            filterChannelsByCategory(idx);
+          }
+        };
+        catTabsEl.appendChild(pill);
+      });
+    }
+
+    function filterChannelsByCategory(catIdx) {
+      const catName = categories[catIdx] || "Wszystkie";
+      if (catName === "Wszystkie") {
+        filteredChannels = [...allChannels];
+      } else if (catName.startsWith("★ Ulubione")) {
+        filteredChannels = allChannels.filter(ch => isChannelFavorite(ch));
+      } else if (catName === "⚙️ M3U / EPG") {
+        openSettingsModal();
+        return;
+      } else if (catName === "🔊 Opcje / Audio") {
+        openAvModal();
+        return;
+      } else {
+        filteredChannels = allChannels.filter(ch => (ch.group || "Ogólne") === catName);
+      }
+      focusedCardIndex = 0;
+      renderCards();
+      renderCategories();
+    }
+
+    function renderCards() {
+      cardsTrackEl.innerHTML = "";
+      const currentChannel = allChannels[currentPlayingIndex];
+
+      if (filteredChannels.length === 0) {
+        cardsTrackEl.innerHTML = `<div style="color: var(--text-muted); padding: 30px 10px; font-size: 16px;">Brak kanałów w tej zakładce. Naciśnij przycisk <b>F</b> (lub otwórz <b>🔊 Opcje / Audio</b>), aby dodać aktualny kanał do <b>★ Ulubionych</b>.</div>`;
+        return;
+      }
+
+      filteredChannels.forEach((ch, idx) => {
+        const card = document.createElement("div");
+        card.className = "channel-card";
+        card.style.setProperty("--card-accent", ch.color || ACCENT_PALETTE[idx % ACCENT_PALETTE.length]);
+
+        if (currentChannel && ch.num === currentChannel.num) card.classList.add("playing");
+        if (focusZone === "cards" && idx === focusedCardIndex) card.classList.add("focused");
+
+        const { cur, progress, fromPlaylist } = getNowAndNextEpg(ch);
+        const hasCatchup = Boolean(ch.catchup || ch.catchupSource || Number(ch.catchupDays) > 0);
+        const daysLabel = Math.min(7, ch.catchupDays || 3);
+        const isFav = isChannelFavorite(ch);
+
+        const subText = cur
+          ? (fromPlaylist ? cur.title : `${formatTime(cur.start)} ${cur.title}`)
+          : "Strumień na żywo";
+
+        card.innerHTML = `
+          <div class="card-top">
+            <span class="card-num">
+              <span class="fav-star-btn ${isFav ? 'is-fav' : ''}" title="Ulubione (F)">${isFav ? '★' : '☆'}</span>
+              CH ${ch.num}
+            </span>
+            <div class="card-badges">
+              ${hasCatchup ? `<span class="catchup-tag">↺ ${daysLabel}d</span>` : ""}
+              <span class="card-badge">${ch.group || "LIVE"}</span>
+            </div>
+          </div>
+          <div>
+            <div class="card-title">${ch.name}</div>
+            <div class="card-sub">${subText}</div>
+            <div class="card-mini-progress">
+              <div class="card-mini-fill" style="width: ${progress}%"></div>
+            </div>
+          </div>
+        `;
+
+        card.querySelector(".fav-star-btn").onclick = (ev) => {
+          ev.stopPropagation();
+          toggleChannelFavorite(ch);
+        };
+
+        card.onclick = () => {
+          focusedCardIndex = idx;
+          const globalIdx = allChannels.findIndex(item => item.num === ch.num);
+          if (globalIdx !== -1) playLiveChannel(globalIdx);
+          hideLauncher();
+        };
+
+        cardsTrackEl.appendChild(card);
+      });
+
+      centerFocusedCard();
+    }
+
+    function centerFocusedCard() {
+      const cardWidth = 263;
+      const viewportWidth = window.innerWidth - 88;
+      const maxVisible = Math.floor(viewportWidth / cardWidth);
+      let offsetIndex = Math.max(0, focusedCardIndex - Math.floor(maxVisible / 2));
+      const maxOffset = Math.max(0, filteredChannels.length - maxVisible);
+      offsetIndex = Math.min(offsetIndex, maxOffset);
+      cardsTrackEl.style.transform = `translateX(-${offsetIndex * cardWidth}px)`;
+    }
+
+    function buildCatchupUrl(channel, program) {
+      const startSec = Math.floor(program.start / 1000);
+      const endSec = Math.floor(program.stop / 1000);
+      const durationSec = Math.max(60, endSec - startSec);
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      let template = channel.catchupSource || "";
+
+      if (!template && channel.url.includes("/mono.m3u8")) {
+        return channel.url.replace("/mono.m3u8", `/timeshift_abs-${startSec}.m3u8`);
+      }
+
+      if (!template) {
+        const sep = channel.url.includes("?") ? "&" : "?";
+        return `${channel.url}${sep}utc=${startSec}&lutc=${nowSec}`;
+      }
+
+      if (channel.catchup === "append" && !template.startsWith("http")) {
+        template = channel.url + template;
+      }
+
+      return template
+        .replace(/\$\{start\}/g, startSec)
+        .replace(/\{start\}/g, startSec)
+        .replace(/\$\{end\}/g, endSec)
+        .replace(/\{end\}/g, endSec)
+        .replace(/\$\{timestamp\}/g, nowSec)
+        .replace(/\{timestamp\}/g, nowSec)
+        .replace(/\$\{duration\}/g, durationSec)
+        .replace(/\{duration\}/g, durationSec)
+        .replace(/\$\{offset\}/g, Math.max(0, nowSec - startSec))
+        .replace(/\{utc\}/g, startSec);
+    }
+
+    function playStreamUrl(streamUrl, label) {
+      showStatus(`Ładowanie: ${label}...`);
+
+      if (isNativeAndroid && window.AndroidPlayer.playStream) {
+        window.AndroidPlayer.playStream(streamUrl);
+        return;
+      }
+
+      if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+      }
+
+      if (Hls.isSupported() && streamUrl.includes(".m3u8")) {
+        hlsInstance = new Hls({ maxBufferLength: 15, maxMaxBufferLength: 30 });
+        hlsInstance.loadSource(streamUrl);
+        hlsInstance.attachMedia(videoEl);
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+          videoEl.play().catch(() => {});
+          hideStatus();
+        });
+        hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            showStatus(`Błąd strumienia (${label})`, false);
+          }
+        });
+      } else {
+        videoEl.src = streamUrl;
+        videoEl.onloadeddata = () => hideStatus();
+        videoEl.onerror = () => showStatus(`Format obsłuży ExoPlayer na Minixie`, false);
+        videoEl.play().catch(() => {});
+      }
+    }
+
+    function playLiveChannel(globalIndex) {
+      if (globalIndex < 0 || globalIndex >= allChannels.length) return;
+      currentPlayingIndex = globalIndex;
+      currentPlayMode = "live";
+      currentCatchupProgram = null;
+
+      const ch = allChannels[globalIndex];
+      localStorage.setItem("webos_iptv_last_ch_num", String(ch.num));
+
+      playStreamUrl(ch.url, ch.name);
+      showBottomInfoBar(ch);
+      renderCards();
+    }
+
+    function playCatchupProgram(channel, program) {
+      const globalIdx = allChannels.findIndex(c => c.num === channel.num);
+      if (globalIdx !== -1) currentPlayingIndex = globalIdx;
+
+      currentPlayMode = "catchup";
+      currentCatchupProgram = program;
+
+      const catchupUrl = buildCatchupUrl(channel, program);
+      playStreamUrl(catchupUrl, `${channel.name} (Archiwum: ${program.title})`);
+      showBottomInfoBar(channel);
+      renderCards();
+    }
+
+    window.showStatus = function(text, showSpinner = true) {
+      statusText.textContent = text;
+      statusEl.querySelector(".spinner").style.display = showSpinner ? "block" : "none";
+      statusEl.style.display = "flex";
+    };
+
+    function hideStatus() {
+      statusEl.style.display = "none";
+    }
+
+    function updateBottomBarContent(ch) {
+      document.getElementById("banner-num").textContent = ch.num;
+      document.getElementById("banner-name").textContent = ch.name;
+      document.getElementById("banner-aspect").textContent = ASPECT_MODES[currentAspectIdx].label;
+
+      const favStarEl = document.getElementById("banner-fav-star");
+      if (isChannelFavorite(ch)) favStarEl.classList.add("visible");
+      else favStarEl.classList.remove("visible");
+
+      const modeBadge = document.getElementById("banner-mode");
+
+      if (currentPlayMode === "catchup" && currentCatchupProgram) {
+        bottomInfoBarEl.classList.add("catchup-mode");
+        modeBadge.textContent = "↺ ARCHIWUM WSTECZ";
+        document.getElementById("banner-epg-now").textContent = `Odtwarzanie: ${currentCatchupProgram.title}`;
+        document.getElementById("banner-epg-next").textContent = "OK → Powrót do transmisji NA ŻYWO";
+        document.getElementById("banner-time-start").textContent = formatTime(currentCatchupProgram.start);
+        document.getElementById("banner-time-stop").textContent = formatTime(currentCatchupProgram.stop);
+        document.getElementById("banner-progress").style.width = "100%";
+      } else {
+        bottomInfoBarEl.classList.remove("catchup-mode");
+        modeBadge.textContent = "● NA ŻYWO";
+        const { cur, nxt, progress, fromPlaylist } = getNowAndNextEpg(ch);
+        document.getElementById("banner-epg-now").textContent = cur
+          ? (fromPlaylist ? `Lista IPTV: ${cur.title}` : `Teraz: ${cur.title}`)
+          : "Teraz: Transmisja na żywo";
+        document.getElementById("banner-epg-next").textContent = nxt
+          ? `Następnie (${formatTime(nxt.start)}): ${nxt.title}`
+          : (ch.group ? `Grupa: ${ch.group}` : "Strumień IPTV");
+        document.getElementById("banner-time-start").textContent = (cur && !fromPlaylist) ? formatTime(cur.start) : "LIVE";
+        document.getElementById("banner-time-stop").textContent = (cur && !fromPlaylist) ? formatTime(cur.stop) : "--:--";
+        document.getElementById("banner-progress").style.width = `${progress}%`;
+      }
+    }
+
+    function showBottomInfoBar(ch) {
+      if (!ch) return;
+      updateBottomBarContent(ch);
+
+      if (isLauncherOpen) hideLauncher();
+
+      bottomInfoBarEl.classList.add("visible");
+      clockEl.classList.add("visible");
+
+      clearTimeout(bannerTimeout);
+      bannerTimeout = setTimeout(() => {
+        bottomInfoBarEl.classList.remove("visible");
+        if (!isLauncherOpen && !isEpgOpen) clockEl.classList.remove("visible");
+      }, 5200);
+    }
+
+    function hideBottomInfoBar() {
+      bottomInfoBarEl.classList.remove("visible");
+      clearTimeout(bannerTimeout);
+    }
+
+    // Gdy brak zewnętrznego XMLTV, a kanał z listy IPTV obsługuje timeshift (np. timeshift="3"),
+    // generujemy bloki 1-godzinne z ostatnich 3 dni, aby nadal dało się cofnąć audycję w archiwum listy IPTV!
+    function buildSyntheticIptvArchiveDays(channel) {
+      const daysCount = Math.min(7, Math.max(1, Number(channel.catchupDays) || 3));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const now = Date.now();
+      const result = [];
+
+      for (let dOffset = -(daysCount - 1); dOffset <= 0; dOffset++) {
+        const dayStart = today.getTime() + dOffset * 86400 * 1000;
+        const blocks = [];
+        for (let h = 0; h < 24; h++) {
+          const start = dayStart + h * 3600 * 1000;
+          const stop = start + 3600 * 1000;
+          if (start > now + 3600 * 1000) break;
+          blocks.push({
+            start,
+            stop,
+            title: `${channel.name} — Blok archiwum ${String(h).padStart(2, "0")}:00`,
+            desc: "Archiwum strumienia z listy IPTV (timeshift)"
+          });
+        }
+        result.push([dayStart, blocks]);
+      }
+      return result;
+    }
+
+    function openEpgDrawer(channel) {
+      if (!channel) return;
+      epgSelectedChannel = channel;
+      isEpgOpen = true;
+      hideLauncher();
+      hideBottomInfoBar();
+
+      document.getElementById("epg-drawer-title").textContent = `${channel.num}. ${channel.name}`;
+      const hasCatchup = Boolean(channel.catchup || channel.catchupSource || Number(channel.catchupDays) > 0);
+      const maxDays = Math.min(7, channel.catchupDays || 3);
+      document.getElementById("epg-drawer-catchup-info").textContent = hasCatchup
+        ? `↺ Archiwum wstecz dostępne (${maxDays} dni) – wybierz audycję i naciśnij OK`
+        : "Przewodnik EPG (do 7 dni wstecz)";
+
+      const progs = getChannelPrograms(channel);
+      const daysMap = new Map();
+
+      progs.forEach(p => {
+        const d = new Date(p.start);
+        d.setHours(0, 0, 0, 0);
+        const dayKey = d.getTime();
+        if (!daysMap.has(dayKey)) daysMap.set(dayKey, []);
+        daysMap.get(dayKey).push(p);
+      });
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sevenDaysAgoStart = today.getTime() - (7 * 86400 * 1000);
+
+      epgDaysList = Array.from(daysMap.entries())
+        .filter(([dayKey]) => dayKey >= sevenDaysAgoStart)
+        .sort((a, b) => a[0] - b[0]);
+
+      // Jeśli zewnętrzne EPG jest wyłączone lub nie ma wpisów, a lista IPTV obsługuje timeshift -> generujemy bloki archiwum z listy IPTV
+      if (epgDaysList.length === 0 && hasCatchup) {
+        epgDaysList = buildSyntheticIptvArchiveDays(channel);
+      }
+
+      const todayIdx = epgDaysList.findIndex(entry => entry[0] === today.getTime());
+      epgSelectedDayIndex = todayIdx !== -1 ? todayIdx : Math.max(0, epgDaysList.length - 1);
+
+      renderEpgDaysAndList(true);
+      epgDrawerEl.classList.add("visible");
+      clockEl.classList.add("visible");
+    }
+
+    function closeEpgDrawer() {
+      isEpgOpen = false;
+      epgDrawerEl.classList.remove("visible");
+      clockEl.classList.remove("visible");
+    }
+
+    function renderEpgDaysAndList(autoFocusLive = false) {
+      const dayTabsEl = document.getElementById("epg-day-tabs");
+      const listEl = document.getElementById("epg-program-list");
+      dayTabsEl.innerHTML = "";
+      listEl.innerHTML = "";
+
+      if (epgDaysList.length === 0) {
+        listEl.innerHTML = `<div style="color: var(--text-muted); padding: 20px;">Brak programu EPG dla tego kanału.</div>`;
+        return;
+      }
+
+      epgDaysList.forEach(([dayStartMs], idx) => {
+        const pill = document.createElement("div");
+        pill.className = "epg-day-pill" + (idx === epgSelectedDayIndex ? " active" : "");
+        pill.textContent = formatDayLabel(dayStartMs);
+        pill.onclick = () => {
+          epgSelectedDayIndex = idx;
+          epgFocusedProgramIndex = 0;
+          renderEpgDaysAndList(false);
+        };
+        dayTabsEl.appendChild(pill);
+      });
+
+      setTimeout(() => {
+        const activeDayPill = dayTabsEl.querySelector(".epg-day-pill.active");
+        if (activeDayPill) activeDayPill.scrollIntoView({ inline: "center", behavior: "smooth" });
+      }, 10);
+
+      epgDayPrograms = epgDaysList[epgSelectedDayIndex][1];
+      const now = Date.now();
+
+      if (autoFocusLive) {
+        const liveIdx = epgDayPrograms.findIndex(p => p.start <= now && p.stop > now);
+        epgFocusedProgramIndex = liveIdx !== -1 ? liveIdx : Math.max(0, epgDayPrograms.length - 1);
+      }
+
+      epgDayPrograms.forEach((prog, idx) => {
+        const isLive = prog.start <= now && prog.stop > now;
+        const isPast = prog.stop <= now;
+
+        const item = document.createElement("div");
+        item.className = "epg-item";
+        if (isLive) item.classList.add("live");
+        if (isPast) item.classList.add("past");
+        if (idx === epgFocusedProgramIndex) item.classList.add("focused");
+
+        let badgeHtml = `<span class="epg-action-badge badge-future">WKRÓTCE</span>`;
+        if (isLive) badgeHtml = `<span class="epg-action-badge badge-live">● NA ŻYWO</span>`;
+        else if (isPast) badgeHtml = `<span class="epg-action-badge badge-replay">↺ ODTWÓRZ WSTECZ</span>`;
+
+        item.innerHTML = `
+          <div class="epg-item-left">
+            <div class="epg-time">${formatTime(prog.start)} – ${formatTime(prog.stop)}</div>
+            <div class="epg-title">${prog.title}</div>
+            <div class="epg-desc">${prog.desc || ""}</div>
+          </div>
+          ${badgeHtml}
+        `;
+
+        item.onclick = () => {
+          epgFocusedProgramIndex = idx;
+          activateEpgProgram(prog);
+        };
+
+        listEl.appendChild(item);
+      });
+
+      setTimeout(() => {
+        const focusedEl = listEl.querySelector(".epg-item.focused");
+        if (focusedEl) focusedEl.scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 20);
+    }
+
+    function activateEpgProgram(prog) {
+      const now = Date.now();
+      if (prog.stop <= now) {
+        playCatchupProgram(epgSelectedChannel, prog);
+        closeEpgDrawer();
+      } else if (prog.start <= now && prog.stop > now) {
+        const globalIdx = allChannels.findIndex(c => c.num === epgSelectedChannel.num);
+        if (globalIdx !== -1) playLiveChannel(globalIdx);
+        closeEpgDrawer();
+      } else {
+        showStatus("Ten program jeszcze się nie rozpoczął", false);
+        setTimeout(hideStatus, 2000);
+      }
+    }
+
+    document.getElementById("btn-close-epg").onclick = closeEpgDrawer;
+
+    function showLauncher() {
+      hideBottomInfoBar();
+      isLauncherOpen = true;
+      launcherEl.classList.add("visible");
+      clockEl.classList.add("visible");
+      showControlsHint(5200);
+      resetLauncherAutoHide();
+    }
+
+    function hideLauncher() {
+      isLauncherOpen = false;
+      launcherEl.classList.remove("visible");
+      if (!isEpgOpen && !bottomInfoBarEl.classList.contains("visible")) {
+        clockEl.classList.remove("visible");
+      }
+      clearTimeout(launcherTimeout);
+    }
+
+    function resetLauncherAutoHide() {
+      clearTimeout(launcherTimeout);
+      launcherTimeout = setTimeout(() => {
+        if (!isModalOpen && !isAvModalOpen) hideLauncher();
+      }, 8500);
+    }
+
+    function handleDigitPress(digit) {
+      digitBuffer += digit;
+      numOsdEl.textContent = digitBuffer;
+      numOsdEl.style.display = "block";
+
+      clearTimeout(digitTimeout);
+      digitTimeout = setTimeout(() => {
+        const targetNum = parseInt(digitBuffer, 10);
+        digitBuffer = "";
+        numOsdEl.style.display = "none";
+
+        const foundIdx = allChannels.findIndex(c => c.num === targetNum);
+        if (foundIdx !== -1) {
+          playLiveChannel(foundIdx);
+          hideLauncher();
+          closeEpgDrawer();
+        }
+      }, 1300);
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (isModalOpen) {
+        if (e.key === "Escape" || e.key === "Backspace") {
+          if (document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") {
+            e.preventDefault();
+            closeSettingsModal();
+          }
+        }
+        return;
+      }
+
+      if (isAvModalOpen) {
+        switch (e.key) {
+          case "Escape":
+          case "Backspace":
+            e.preventDefault();
+            closeAvModal();
+            break;
+          case "ArrowUp":
+            e.preventDefault();
+            avFocusedIndex = (avFocusedIndex - 1 + avFlatOptions.length) % avFlatOptions.length;
+            renderAvOptions();
+            break;
+          case "ArrowDown":
+            e.preventDefault();
+            avFocusedIndex = (avFocusedIndex + 1) % avFlatOptions.length;
+            renderAvOptions();
+            break;
+          case "Enter":
+            e.preventDefault();
+            if (avFlatOptions[avFocusedIndex]) activateAvOption(avFlatOptions[avFocusedIndex]);
+            break;
+        }
+        return;
+      }
+
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        handleDigitPress(e.key);
+        return;
+      }
+
+      // Klawisz F -> Dodaj / Usuń z Ulubionych (aktualnie podświetlony na pasku lub aktualnie odtwarzany kanał)
+      if (e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        const targetCh = (isLauncherOpen && focusZone === "cards" && filteredChannels[focusedCardIndex])
+          ? filteredChannels[focusedCardIndex]
+          : allChannels[currentPlayingIndex];
+        toggleChannelFavorite(targetCh);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        openSettingsModal();
+        return;
+      }
+
+      if (e.key.toLowerCase() === "z" || e.key === "Zoom") {
+        e.preventDefault();
+        cycleAspectRatio();
+        return;
+      }
+
+      if (e.key.toLowerCase() === "a" || e.key === "Audio" || e.key === "Subtitle") {
+        e.preventDefault();
+        openAvModal();
+        return;
+      }
+
+      if (e.key.toLowerCase() === "i" || e.key === "Info") {
+        e.preventDefault();
+        if (bottomInfoBarEl.classList.contains("visible")) {
+          hideBottomInfoBar();
+          clockEl.classList.remove("visible");
+        } else if (allChannels[currentPlayingIndex]) {
+          showBottomInfoBar(allChannels[currentPlayingIndex]);
+        }
+        return;
+      }
+
+      if (e.key.toLowerCase() === "e" || e.key === "Guide") {
+        e.preventDefault();
+        if (isEpgOpen) {
+          closeEpgDrawer();
+        } else {
+          const targetCh = isLauncherOpen && filteredChannels[focusedCardIndex]
+            ? filteredChannels[focusedCardIndex]
+            : allChannels[currentPlayingIndex];
+          openEpgDrawer(targetCh);
+        }
+        return;
+      }
+
+      if (isEpgOpen) {
+        switch (e.key) {
+          case "Escape":
+          case "Backspace":
+            e.preventDefault();
+            closeEpgDrawer();
+            break;
+          case "ArrowUp":
+            e.preventDefault();
+            if (epgDayPrograms.length > 0) {
+              epgFocusedProgramIndex = (epgFocusedProgramIndex - 1 + epgDayPrograms.length) % epgDayPrograms.length;
+              renderEpgDaysAndList(false);
+            }
+            break;
+          case "ArrowDown":
+            e.preventDefault();
+            if (epgDayPrograms.length > 0) {
+              epgFocusedProgramIndex = (epgFocusedProgramIndex + 1) % epgDayPrograms.length;
+              renderEpgDaysAndList(false);
+            }
+            break;
+          case "ArrowLeft":
+            e.preventDefault();
+            if (epgDaysList.length > 0) {
+              epgSelectedDayIndex = (epgSelectedDayIndex - 1 + epgDaysList.length) % epgDaysList.length;
+              epgFocusedProgramIndex = 0;
+              renderEpgDaysAndList(false);
+            }
+            break;
+          case "ArrowRight":
+            e.preventDefault();
+            if (epgDaysList.length > 0) {
+              epgSelectedDayIndex = (epgSelectedDayIndex + 1) % epgDaysList.length;
+              epgFocusedProgramIndex = 0;
+              renderEpgDaysAndList(false);
+            }
+            break;
+          case "Enter":
+            e.preventDefault();
+            if (epgDayPrograms[epgFocusedProgramIndex]) {
+              activateEpgProgram(epgDayPrograms[epgFocusedProgramIndex]);
+            }
+            break;
+        }
+        return;
+      }
+
+      if (!isLauncherOpen) {
+        switch (e.key) {
+          case "Enter":
+          case " ":
+            e.preventDefault();
+            showLauncher();
+            break;
+          case "ArrowUp":
+          case "ChannelUp":
+            e.preventDefault();
+            playLiveChannel((currentPlayingIndex + 1) % allChannels.length);
+            break;
+          case "ArrowDown":
+          case "ChannelDown":
+            e.preventDefault();
+            playLiveChannel((currentPlayingIndex - 1 + allChannels.length) % allChannels.length);
+            break;
+          case "ArrowRight":
+            e.preventDefault();
+            openEpgDrawer(allChannels[currentPlayingIndex]);
+            break;
+          case "ArrowLeft":
+            e.preventDefault();
+            showLauncher();
+            break;
+        }
+        return;
+      }
+
+      resetLauncherAutoHide();
+
+      switch (e.key) {
+        case "Escape":
+        case "Backspace":
+          e.preventDefault();
+          hideLauncher();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          if (focusZone === "cards") {
+            focusZone = "categories";
+            renderCategories();
+            renderCards();
+          }
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          if (focusZone === "categories") {
+            focusZone = "cards";
+            renderCategories();
+            renderCards();
+          } else {
+            hideLauncher();
+          }
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          if (focusZone === "cards" && filteredChannels.length > 0) {
+            focusedCardIndex = (focusedCardIndex - 1 + filteredChannels.length) % filteredChannels.length;
+            renderCards();
+          } else {
+            activeCategoryIndex = (activeCategoryIndex - 1 + categories.length) % categories.length;
+            const cat = categories[activeCategoryIndex];
+            if (cat !== "⚙️ M3U / EPG" && cat !== "🔊 Opcje / Audio") {
+              filterChannelsByCategory(activeCategoryIndex);
+            } else {
+              renderCategories();
+            }
+          }
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          if (focusZone === "cards" && filteredChannels.length > 0) {
+            focusedCardIndex = (focusedCardIndex + 1) % filteredChannels.length;
+            renderCards();
+          } else {
+            activeCategoryIndex = (activeCategoryIndex + 1) % categories.length;
+            const cat = categories[activeCategoryIndex];
+            if (cat !== "⚙️ M3U / EPG" && cat !== "🔊 Opcje / Audio") {
+              filterChannelsByCategory(activeCategoryIndex);
+            } else {
+              renderCategories();
+            }
+          }
+          break;
+        case "Enter":
+          e.preventDefault();
+          if (focusZone === "categories") {
+            const cat = categories[activeCategoryIndex];
+            if (cat === "⚙️ M3U / EPG") {
+              openSettingsModal();
+            } else if (cat === "🔊 Opcje / Audio") {
+              openAvModal();
+            } else {
+              focusZone = "cards";
+              renderCategories();
+              renderCards();
+            }
+          } else if (filteredChannels[focusedCardIndex]) {
+            const selected = filteredChannels[focusedCardIndex];
+            const globalIdx = allChannels.findIndex(c => c.num === selected.num);
+            if (globalIdx !== -1) playLiveChannel(globalIdx);
+            hideLauncher();
+          }
+          break;
+      }
+    });
+
+    // Parser M3U z obsługą url-tvg / x-tvg-url w nagłówku #EXTM3U oraz #EXTGRP / timeshift
+    function parseM3U(content, startCounter = 1) {
+      const lines = content.split(/\r?\n/);
+      const parsed = [];
+      let currentMeta = null;
+      let counter = startCounter;
+      playlistEmbeddedEpgUrls = [];
+
+      for (let line of lines) {
+        line = line.trim();
+        if (!line) continue;
+
+        if (line.startsWith("#EXTM3U")) {
+          const urlTvgMatch = line.match(/(?:url-tvg|x-tvg-url)="([^"]+)"/i);
+          if (urlTvgMatch && urlTvgMatch[1]) {
+            urlTvgMatch[1].split(",").forEach(u => {
+              const clean = u.trim();
+              if (clean) playlistEmbeddedEpgUrls.push(clean);
+            });
+          }
+          continue;
+        }
+
+        if (line.startsWith("#EXTINF:")) {
+          const groupMatch = line.match(/group-title="([^"]+)"/i);
+          const tvgIdMatch = line.match(/tvg-id="([^"]+)"/i);
+          const tvgNameMatch = line.match(/tvg-name="([^"]+)"/i);
+          const logoMatch = line.match(/tvg-logo="([^"]+)"/i);
+          const catchupMatch = line.match(/catchup="([^"]+)"/i);
+          const catchupDaysMatch = line.match(/(?:catchup-days|timeshift)="([^"]+)"/i);
+          const catchupSourceMatch = line.match(/catchup-source="([^"]+)"/i);
+
+          const commaIdx = line.lastIndexOf(",");
+          const title = commaIdx !== -1 ? line.substring(commaIdx + 1).trim() : `Kanał ${counter}`;
+          const tsDays = catchupDaysMatch ? parseInt(catchupDaysMatch[1], 10) : 0;
+
+          // Jeśli w #EXTINF podano inny tvg-name niż nazwa po przecinku, zachowujemy go jako opis programu z listy IPTV
+          const rawTvgName = tvgNameMatch ? tvgNameMatch[1].trim() : "";
+          const iptvEpgTitle = (rawTvgName && rawTvgName.toLowerCase() !== title.toLowerCase()) ? rawTvgName : "";
+
+          currentMeta = {
+            num: counter++,
+            name: title,
+            tvgId: tvgIdMatch ? tvgIdMatch[1] : "",
+            logo: logoMatch ? logoMatch[1] : "",
+            group: groupMatch ? groupMatch[1] : "Ogólne",
+            catchup: catchupMatch ? catchupMatch[1] : (tsDays > 0 ? "flussonic" : ""),
+            catchupDays: tsDays,
+            catchupSource: catchupSourceMatch ? catchupSourceMatch[1] : "",
+            iptvEpgTitle: iptvEpgTitle,
+            color: ACCENT_PALETTE[(counter - 2) % ACCENT_PALETTE.length]
+          };
+        } else if (line.startsWith("#EXTGRP:") && currentMeta) {
+          const grp = line.substring(8).trim();
+          if (grp) currentMeta.group = grp;
+        } else if (!line.startsWith("#") && currentMeta) {
+          currentMeta.url = line;
+          parsed.push(currentMeta);
+          currentMeta = null;
+        }
+      }
+      return parsed;
+    }
+
+    function parseXmltvDate(str) {
+      if (!str || str.length < 14) return 0;
+      const y = parseInt(str.slice(0, 4), 10);
+      const m = parseInt(str.slice(4, 6), 10) - 1;
+      const d = parseInt(str.slice(6, 8), 10);
+      const H = parseInt(str.slice(8, 10), 10);
+      const M = parseInt(str.slice(10, 12), 10);
+      const S = parseInt(str.slice(12, 14), 10);
+
+      const tzMatch = str.match(/([+-])(\d{2})(\d{2})/);
+      if (tzMatch) {
+        const sign = tzMatch[1] === "+" ? 1 : -1;
+        const offsetMinutes = sign * (parseInt(tzMatch[2], 10) * 60 + parseInt(tzMatch[3], 10));
+        return Date.UTC(y, m, d, H, M, S) - offsetMinutes * 60000;
+      }
+      return new Date(y, m, d, H, M, S).getTime();
+    }
+
+    function mergeXmltvIntoDatabase(xmlText) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlText, "text/xml");
+      const minAllowedTime = Date.now() - SEVEN_DAYS_MS;
+
+      const channelNameMap = {};
+      doc.querySelectorAll("channel").forEach(chNode => {
+        const id = (chNode.getAttribute("id") || "").toLowerCase();
+        chNode.querySelectorAll("display-name").forEach(dn => {
+          const rawName = (dn.textContent || "").trim().toLowerCase();
+          const normName = normalizeChannelName(rawName);
+          if (rawName && id) channelNameMap[rawName] = id;
+          if (normName && id) channelNameMap[normName] = id;
+        });
+      });
+
+      const incomingByChannel = {};
+      doc.querySelectorAll("programme").forEach(progNode => {
+        const chId = (progNode.getAttribute("channel") || "").toLowerCase();
+        const start = parseXmltvDate(progNode.getAttribute("start"));
+        const stop = parseXmltvDate(progNode.getAttribute("stop"));
+        if (!chId || !start || !stop || stop < minAllowedTime) return;
+
+        const titleNode = progNode.querySelector("title");
+        const descNode = progNode.querySelector("desc");
+
+        if (!incomingByChannel[chId]) incomingByChannel[chId] = [];
+        incomingByChannel[chId].push({
+          start,
+          stop,
+          title: titleNode ? titleNode.textContent.trim() : "Program TV",
+          desc: descNode ? descNode.textContent.trim() : ""
+        });
+      });
+
+      Object.entries(incomingByChannel).forEach(([chId, newProgs]) => {
+        const existing = epgDatabase[chId] || [];
+        const mergedMap = new Map();
+        existing.forEach(p => mergedMap.set(p.start, p));
+        newProgs.forEach(p => mergedMap.set(p.start, p));
+        epgDatabase[chId] = Array.from(mergedMap.values()).sort((a, b) => a.start - b.start);
+      });
+
+      Object.entries(channelNameMap).forEach(([nameKey, id]) => {
+        if (epgDatabase[id]) epgDatabase[nameKey] = epgDatabase[id];
+      });
+
+      updateEpgStatsUI();
+    }
+
+    function saveEpgToStorageSafe() {
+      try {
+        localStorage.setItem("webos_iptv_epg_v7", JSON.stringify(epgDatabase));
+      } catch (err) {}
+    }
+
+    function openSettingsModal() {
+      isModalOpen = true;
+      renderBuiltinEpgControls();
+      updateEpgStatsUI();
+      modalEl.classList.add("visible");
+    }
+
+    function closeSettingsModal() {
+      isModalOpen = false;
+      if (isNativeAndroid && window.AndroidPlayer.setInputFocused) {
+        window.AndroidPlayer.setInputFocused(false);
+      }
+      modalEl.classList.remove("visible");
+    }
+
+    document.getElementById("btn-close-modal").onclick = closeSettingsModal;
+
+    document.getElementById("btn-clear-epg").onclick = () => {
+      epgDatabase = {};
+      localStorage.removeItem("webos_iptv_epg_v7");
+      updateEpgStatsUI();
+      renderCards();
+      showOsdToast("Wyczyszczono pamięć EPG");
+    };
+
+    document.getElementById("btn-restore-default-m3u").onclick = async () => {
+      document.getElementById("m3u-url-input").value = DEFAULT_M3U_URL;
+      localStorage.setItem("webos_iptv_m3u_url_v7", DEFAULT_M3U_URL);
+      const ok = await loadM3uFromUrl(DEFAULT_M3U_URL, true);
+      if (ok) {
+        activeCategoryIndex = 0;
+        rebuildCategories();
+        filterChannelsByCategory(0);
+        playLiveChannel(0);
+        closeSettingsModal();
+      }
+    };
+
+    document.getElementById("btn-load-url").onclick = async () => {
+      const m3uUrl = document.getElementById("m3u-url-input").value.trim();
+      localStorage.setItem("webos_iptv_m3u_url_v7", m3uUrl);
+
+      try {
+        if (m3uUrl) {
+          await loadM3uFromUrl(m3uUrl, true);
+        }
+
+        await fetchAndMergeActiveEpgSources(true);
+
+        activeCategoryIndex = 0;
+        rebuildCategories();
+        filterChannelsByCategory(0);
+        playLiveChannel(0);
+        closeSettingsModal();
+      } catch (err) {
+        alert("Błąd pobierania danych.");
+      } finally {
+        hideStatus();
+      }
+    };
+
+    document.getElementById("m3u-file-input").onchange = async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+
+      showStatus(`Wczytywanie ${files.length} pliku(ów) M3U...`);
+      let combinedChannels = [];
+      let nextNum = 1;
+
+      for (const file of files) {
+        const text = await file.text();
+        const parsed = parseM3U(text, nextNum);
+        combinedChannels = combinedChannels.concat(parsed);
+        nextNum += parsed.length;
+      }
+
+      if (combinedChannels.length > 0) {
+        allChannels = combinedChannels;
+        localStorage.setItem("webos_iptv_channels_v7", JSON.stringify(allChannels));
+        activeCategoryIndex = 0;
+        rebuildCategories();
+        filterChannelsByCategory(0);
+        playLiveChannel(0);
+        closeSettingsModal();
+      }
+      hideStatus();
+    };
+
+    document.getElementById("epg-file-input").onchange = async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+
+      for (let i = 0; i < files.length; i++) {
+        showStatus(`Przetwarzanie pliku EPG ${i + 1} z ${files.length}...`);
+        const xmlText = await files[i].text();
+        mergeXmltvIntoDatabase(xmlText);
+      }
+
+      saveEpgToStorageSafe();
+      renderCards();
+      if (allChannels[currentPlayingIndex]) showBottomInfoBar(allChannels[currentPlayingIndex]);
+      hideStatus();
+    };
+
+    init();
+  </script>
+</body>
+</html>
