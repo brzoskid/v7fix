@@ -192,8 +192,9 @@ public class MainActivity extends AppCompatActivity {
     private void initExoPlayer() {
         trackSelector = new DefaultTrackSelector(this);
 
+        // Zoptymalizowany bufor startowy (1500ms) - zapobiega długiemu zamrożeniu pierwszej klatki na Amlogic S905
         DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(6000, 25000, 2500, 4000)
+                .setBufferDurationsMs(2500, 15000, 1500, 2500)
                 .build();
 
         httpDataSourceFactory = new DefaultHttpDataSourceFactory(
@@ -254,16 +255,19 @@ public class MainActivity extends AppCompatActivity {
             details += " (" + cause.getClass().getSimpleName() + ": " + (cause.getMessage() != null ? cause.getMessage() : "") + ")";
         }
         String safeDetails = sanitizeForJs(details);
+        // Przekazanie logu błędu do panelu diagnostycznego w JS
+        notifyJs("window.appendAppLog && window.appendAppLog('EXO_ERROR: " + safeDetails + "');");
         notifyJs("showStatus && showStatus('Błąd ExoPlayer: " + safeDetails + "', false)");
     }
 
     private String sanitizeForJs(String input) {
         if (input == null) return "";
-        return input.replace("\\", "\\\\")
+        return input.replace("\", "\\")
                 .replace("'", "")
-                .replace("\"", "")
-                .replace("\r", " ")
-                .replace("\n", " ");
+                .replace(""", "")
+                .replace("", " ")
+                .replace("
+", " ");
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -527,6 +531,7 @@ public class MainActivity extends AppCompatActivity {
                 } catch (Exception e) {
                     String rawMsg = e.getMessage() != null ? e.getMessage() : "";
                     String errMsg = sanitizeForJs(e.getClass().getSimpleName() + ": " + rawMsg);
+                    notifyJs("window.appendAppLog && window.appendAppLog('FETCH_ERROR: " + errMsg + "');");
                     notifyJs("window.__onNativeFetchError && window.__onNativeFetchError('" + requestId + "', '" + errMsg + "')");
                 }
             });

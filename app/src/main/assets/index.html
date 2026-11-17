@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>webOS IPTV Player – Minix NEO-U1 v7</title>
+  <title>webOS IPTV Player – Minix NEO-U1 v8</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
   <style>
     :root {
@@ -91,22 +91,12 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Dolny kontener komunikatów (toast + podpowiedź pilota) – nad dolną belką / launcherem */
-    #bottom-msgs {
-      position: fixed;
-      left: 44px;
-      right: 44px;
-      bottom: 40px;
-      z-index: 60;
-      display: flex;
-      flex-direction: column-reverse;
-      align-items: center;
-      gap: 8px;
-      pointer-events: none;
-      transition: bottom 0.3s ease;
-    }
-
     #osd-toast {
+      position: fixed;
+      top: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 60;
       background: rgba(15, 17, 23, 0.94);
       border: 2px solid var(--webos-pink);
       box-shadow: 0 0 22px var(--webos-pink-glow);
@@ -115,12 +105,6 @@
       font-size: 16px;
       font-weight: 700;
       display: none;
-      opacity: 0;
-      transition: opacity 0.35s ease;
-    }
-
-    #osd-toast.visible {
-      opacity: 1;
     }
 
     #top-right-hud {
@@ -769,7 +753,7 @@
     }
 
     .modal-box {
-      width: 780px;
+      width: 820px;
       max-height: 92vh;
       overflow-y: auto;
       background: #151821;
@@ -902,6 +886,67 @@
       margin-bottom: 12px;
     }
 
+    /* Modal logów diagnostycznych */
+    #logs-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(5, 7, 10, 0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #logs-modal.visible {
+      display: flex;
+    }
+
+    .logs-box {
+      width: 860px;
+      height: 84vh;
+      background: #0f1117;
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9);
+    }
+
+    .logs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .logs-header h2 {
+      font-size: 20px;
+      color: #fff;
+    }
+
+    #logs-textarea {
+      flex: 1;
+      width: 100%;
+      background: #080a0e;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      color: #34d399;
+      font-family: monospace;
+      font-size: 12px;
+      padding: 12px;
+      resize: none;
+      outline: none;
+      user-select: text;
+    }
+
+    .logs-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
     .modal-actions {
       display: flex;
       gap: 10px;
@@ -925,21 +970,26 @@
       background: var(--webos-pink);
     }
 
-    /* Podpowiedź pilota (na dole) z płynnym zanikaniem po kilku sekundach */
     #controls-hint {
+      position: fixed;
+      top: 32px;
+      left: 44px;
+      z-index: 15;
       font-size: 12px;
       color: rgba(255, 255, 255, 0.8);
       background: rgba(14, 16, 22, 0.88);
       border: 1px solid rgba(255, 255, 255, 0.12);
       padding: 8px 16px;
       border-radius: 10px;
-      display: none;
+      pointer-events: none;
       opacity: 0;
-      transition: opacity 0.35s ease;
+      transform: translateY(-16px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
     }
 
     #controls-hint.visible {
       opacity: 1;
+      transform: translateY(0);
     }
   </style>
 </head>
@@ -954,11 +1004,10 @@
     <span id="status-text">Łączenie ze strumieniem...</span>
   </div>
 
-  <div id="bottom-msgs">
-    <div id="osd-toast">Proporcje: Dopasuj</div>
-    <div id="controls-hint">
-      Pilot MINIX: <b>OK</b> = Kanały &nbsp;|&nbsp; <b>Prawo / ↻</b> = EPG &nbsp;|&nbsp; <b>F</b> = ★ Ulubione &nbsp;|&nbsp; <b>≡ Menu</b> = Ustawienia &nbsp;|&nbsp; <b>◫</b> = Proporcje &nbsp;|&nbsp; <b>←</b> = Audio/Opcje
-    </div>
+  <div id="osd-toast">Proporcje: Dopasuj</div>
+
+  <div id="controls-hint">
+    Pilot MINIX: <b>OK</b> = Kanały &nbsp;|&nbsp; <b>Prawo / ↻</b> = EPG &nbsp;|&nbsp; <b>F</b> = ★ Ulubione &nbsp;|&nbsp; <b>≡ Menu</b> = Ustawienia &nbsp;|&nbsp; <b>◫</b> = Proporcje &nbsp;|&nbsp; <b>←</b> = Audio/Opcje
   </div>
 
   <div id="top-right-hud">
@@ -1022,10 +1071,13 @@
 
   <div id="settings-modal">
     <div class="modal-box">
-      <h2>Źródła Listy M3U oraz Przewodnika EPG (XMLTV)</h2>
-      <p>Gdy wbudowane EPG (epg.ovh) jest <b>WYŁĄCZONE</b> (lub brak wpisu dla stacji), aplikacja automatycznie korzysta z <b>EPG / metadanych samej listy IPTV</b>. Dekoder FFmpeg obsługuje ścieżki AC3 oraz MP2/MPG.</p>
+      <h2>Ustawienia Listy M3U, EPG i Diagnostyka</h2>
+      <p>Szybki start (1.5s), dekoder FFmpeg dla AC3/MP2 oraz podgląd logów i błędów w razie awarii strumienia lub kodeka.</p>
 
-      <div class="epg-stats-pill" id="epg-db-stats">Załadowane kanały w bazie EPG: 0</div>
+      <div style="display:flex; gap:12px; margin-bottom:14px; align-items:center; flex-wrap:wrap;">
+        <div class="epg-stats-pill" id="epg-db-stats" style="margin-bottom:0;">Załadowane wpisy EPG: 0</div>
+        <button class="btn primary" id="btn-open-logs" style="background:#0ea5e9;">📋 Pokaż Logi i Błędy aplikacji</button>
+      </div>
 
       <div class="builtin-epg-panel">
         <div class="builtin-epg-header">
@@ -1036,7 +1088,7 @@
       </div>
 
       <div class="input-group">
-        <label for="m3u-url-input">Adres URL listy M3U / M3U8 (możesz zmienić na dowolny inny):</label>
+        <label for="m3u-url-input">Adres URL listy M3U / M3U8:</label>
         <input type="text" id="m3u-url-input" placeholder="http://twoj-serwer/lista.m3u" />
       </div>
 
@@ -1057,9 +1109,24 @@
 
       <div class="modal-actions">
         <button class="btn" id="btn-clear-epg">Wyczyść pamięć EPG</button>
-        <button class="btn" id="btn-restore-default-m3u">Przywróć domyślny URL M3U</button>
+        <button class="btn" id="btn-restore-default-m3u">Przywróć domyślny URL</button>
         <button class="btn" id="btn-close-modal">Zamknij (ESC)</button>
         <button class="btn primary" id="btn-load-url">Zapisz i pobierz aktywne źródła</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Okno modalne z logami i błędami -->
+  <div id="logs-modal">
+    <div class="logs-box">
+      <div class="logs-header">
+        <h2>Logi Diagnostyczne i Błędy Strumieni (Minix NEO-U1 v8)</h2>
+        <button class="btn" id="btn-close-logs">Zamknij (ESC)</button>
+      </div>
+      <textarea id="logs-textarea" readonly></textarea>
+      <div class="logs-actions">
+        <button class="btn" id="btn-clear-logs">Wyczyść logi</button>
+        <button class="btn primary" id="btn-copy-logs">Kopiuj do schowka</button>
       </div>
     </div>
   </div>
@@ -1069,6 +1136,55 @@
     if (!isNativeAndroid) {
       document.body.classList.add("desktop-mode");
     }
+
+    // System gromadzenia logów diagnostycznych (zapobiega crashom i pozwala przeglądać błędy)
+    let appLogsList = [];
+    window.appendAppLog = function(msg) {
+      const timeStr = new Date().toLocaleTimeString();
+      const line = `[${timeStr}] ${msg}`;
+      appLogsList.push(line);
+      if (appLogsList.length > 150) appLogsList.shift();
+      const ta = document.getElementById("logs-textarea");
+      if (ta) {
+        ta.value = appLogsList.join("\n");
+        ta.scrollTop = ta.scrollHeight;
+      }
+    };
+
+    window.onerror = function(message, source, lineno, colno, error) {
+      const errInfo = `JS_CRASH: ${message} (${source}:${lineno}:${colno})`;
+      window.appendAppLog(errInfo);
+    };
+
+    window.addEventListener('unhandledrejection', function(event) {
+      window.appendAppLog(`JS_PROMISE_REJECTION: ${event.reason}`);
+    });
+
+    document.getElementById("btn-open-logs").onclick = () => {
+      document.getElementById("logs-modal").classList.add("visible");
+      const ta = document.getElementById("logs-textarea");
+      if (ta) {
+        ta.value = appLogsList.join("\n");
+        ta.scrollTop = ta.scrollHeight;
+      }
+    };
+
+    document.getElementById("btn-close-logs").onclick = () => {
+      document.getElementById("logs-modal").classList.remove("visible");
+    };
+
+    document.getElementById("btn-clear-logs").onclick = () => {
+      appLogsList = [];
+      document.getElementById("logs-textarea").value = "";
+      showOsdToast("Wyczyszczono logi");
+    };
+
+    document.getElementById("btn-copy-logs").onclick = () => {
+      const ta = document.getElementById("logs-textarea");
+      ta.select();
+      document.execCommand("copy");
+      showOsdToast("Skopiowano logi do schowka");
+    };
 
     document.addEventListener("focusin", (e) => {
       const isText = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
@@ -1110,6 +1226,7 @@
       const entry = pendingNativeFetches.get(reqId);
       if (entry) {
         pendingNativeFetches.delete(reqId);
+        window.appendAppLog(`FETCH_ERROR: ${errMsg}`);
         entry.reject(new Error(errMsg));
       }
     };
@@ -1158,8 +1275,8 @@
     let builtinEpgGlobalEnabled = true;
 
     let allChannels = [];
-    let favoriteChannelKeys = new Set(); // Przechowuje nazwy lub tvgId ulubionych kanałów
-    let playlistEmbeddedEpgUrls = []; // Adresy url-tvg / x-tvg-url wyciągnięte z nagłówka #EXTM3U
+    let favoriteChannelKeys = new Set();
+    let playlistEmbeddedEpgUrls = [];
     let epgDatabase = {};
     let categories = [];
     let activeCategoryIndex = 0;
@@ -1206,61 +1323,33 @@
     const avModalEl = document.getElementById("av-modal");
     const modalEl = document.getElementById("settings-modal");
 
-    window.onNativePlayerReady = () => hideStatus();
-    window.onNativePlayerBuffering = () => showStatus("Buforowanie strumienia (ExoPlayer)...");
-    window.onNativePlayerError = () => showStatus("Błąd odtwarzania strumienia w ExoPlayerze", false);
-
-    const bottomMsgsEl = document.getElementById("bottom-msgs");
-    let clockTimeout = null;
-
-    // Ustawia kontener komunikatów tuż nad aktualnie widoczną dolną belką / launcherem
-    function positionBottomMsgs() {
-      let bottom = 40;
-      if (launcherEl && launcherEl.classList.contains("visible")) {
-        bottom = launcherEl.offsetHeight + 14;
-      } else if (bottomInfoBarEl && bottomInfoBarEl.classList.contains("visible")) {
-        bottom = 34 + bottomInfoBarEl.offsetHeight + 14;
-      }
-      bottomMsgsEl.style.bottom = bottom + "px";
-    }
-
-    function fadeInEl(el) {
-      el.style.display = "block";
-      void el.offsetWidth;
-      el.classList.add("visible");
-    }
-
-    function fadeOutEl(el) {
-      el.classList.remove("visible");
-      setTimeout(() => {
-        if (!el.classList.contains("visible")) el.style.display = "none";
-      }, 380);
-    }
-
-    // Zegar (górna belka) znika po kilku sekundach, tak jak dolna belka
-    function showClock(durationMs = 5200) {
-      clockEl.classList.add("visible");
-      clearTimeout(clockTimeout);
-      clockTimeout = setTimeout(() => clockEl.classList.remove("visible"), durationMs);
-    }
+    window.onNativePlayerReady = () => {
+      hideStatus();
+      window.appendAppLog("PLAYER_READY");
+    };
+    window.onNativePlayerBuffering = () => showStatus("Buforowanie strumienia...");
+    window.onNativePlayerError = () => {
+      window.appendAppLog("PLAYER_ERROR_CALLBACK");
+      showStatus("Błąd odtwarzania strumienia", false);
+    };
 
     function showControlsHint(durationMs = 5200) {
       if (!controlsHintEl) return;
-      positionBottomMsgs();
-      fadeInEl(controlsHintEl);
+      controlsHintEl.classList.add("visible");
       clearTimeout(hintTimeout);
-      hintTimeout = setTimeout(() => fadeOutEl(controlsHintEl), durationMs);
+      hintTimeout = setTimeout(() => {
+        controlsHintEl.classList.remove("visible");
+      }, durationMs);
     }
 
     function normalizeChannelName(name) {
       return (name || "")
         .toLowerCase()
-        .replace(/\b(hd|fhd|uhd|4k|sd|pl|vip|raw|50fps)\b/g, "")
+        .replace(/(hd|fhd|uhd|4k|sd|pl|vip|raw|50fps)/g, "")
         .replace(/[^a-z0-9ąćęłńóśźż]+/g, " ")
         .trim();
     }
 
-    // ================= ULUBIONE KANAŁY =================
     function getChannelFavKey(ch) {
       return (ch.name || "").trim().toLowerCase();
     }
@@ -1271,7 +1360,7 @@
     }
 
     function loadFavorites() {
-      const saved = localStorage.getItem("webos_iptv_favorites_v7");
+      const saved = localStorage.getItem("webos_iptv_favorites_v8");
       if (saved) {
         try {
           const arr = JSON.parse(saved);
@@ -1283,7 +1372,7 @@
     }
 
     function saveFavorites() {
-      localStorage.setItem("webos_iptv_favorites_v7", JSON.stringify(Array.from(favoriteChannelKeys)));
+      localStorage.setItem("webos_iptv_favorites_v8", JSON.stringify(Array.from(favoriteChannelKeys)));
     }
 
     function toggleChannelFavorite(ch) {
@@ -1308,12 +1397,11 @@
       }
     }
 
-    // ================= KONFIGURACJA EPG (ZEWNĘTRZNE + EPG Z LISTY IPTV) =================
     function loadBuiltinEpgConfig() {
-      const savedGlobal = localStorage.getItem("webos_iptv_builtin_global_v7");
+      const savedGlobal = localStorage.getItem("webos_iptv_builtin_global_v8");
       builtinEpgGlobalEnabled = savedGlobal === null ? true : savedGlobal === "true";
 
-      const savedSources = localStorage.getItem("webos_iptv_builtin_sources_v7");
+      const savedSources = localStorage.getItem("webos_iptv_builtin_sources_v8");
       if (savedSources) {
         try {
           builtinEpgSources = JSON.parse(savedSources);
@@ -1327,8 +1415,8 @@
     }
 
     function saveBuiltinEpgConfig() {
-      localStorage.setItem("webos_iptv_builtin_global_v7", String(builtinEpgGlobalEnabled));
-      localStorage.setItem("webos_iptv_builtin_sources_v7", JSON.stringify(builtinEpgSources));
+      localStorage.setItem("webos_iptv_builtin_global_v8", String(builtinEpgGlobalEnabled));
+      localStorage.setItem("webos_iptv_builtin_sources_v8", JSON.stringify(builtinEpgSources));
       renderBuiltinEpgControls();
     }
 
@@ -1371,16 +1459,15 @@
       saveBuiltinEpgConfig();
       if (!builtinEpgGlobalEnabled) {
         epgDatabase = {};
-        localStorage.removeItem("webos_iptv_epg_v7");
+        localStorage.removeItem("webos_iptv_epg_v8");
         updateEpgStatsUI();
-        // Jeśli lista M3U miała własny atrybut url-tvg / x-tvg-url lub zdefiniowane EPG dostawcy hls.gd, pobieramy je automatycznie
         if (playlistEmbeddedEpgUrls.length > 0) {
           showOsdToast("Przełączono na EPG z listy IPTV...");
           await fetchAndMergeActiveEpgSources(false);
         } else {
           renderCards();
           if (allChannels[currentPlayingIndex]) updateBottomBarContent(allChannels[currentPlayingIndex]);
-          showOsdToast("Zewnętrzne EPG WYŁĄCZONE — aktywne metadane z listy IPTV");
+          showOsdToast("Zewnętrzne EPG WYŁĄCZONE");
         }
       } else {
         showOsdToast("Zewnętrzne EPG: WŁĄCZONE");
@@ -1395,13 +1482,13 @@
           if (src.enabled && src.url) urlsToFetch.push(src.url);
         });
       } else if (playlistEmbeddedEpgUrls.length > 0) {
-        // Gdy zewnętrzne EPG jest wyłączone, pobieramy XMLTV osadzone w nagłówku listy M3U (url-tvg / x-tvg-url)
         playlistEmbeddedEpgUrls.forEach(u => urlsToFetch.push(u));
       }
 
       const rawCustomUrls = document.getElementById("epg-urls-textarea").value.trim();
-      localStorage.setItem("webos_iptv_epg_urls_v7", rawCustomUrls);
-      rawCustomUrls.split(/\r?\n/).forEach(u => {
+      localStorage.setItem("webos_iptv_epg_urls_v8", rawCustomUrls);
+      rawCustomUrls.split(/?
+/).forEach(u => {
         const clean = u.trim();
         if (clean) urlsToFetch.push(clean);
       });
@@ -1421,7 +1508,7 @@
             mergeXmltvIntoDatabase(xmlText);
           }
         } catch (err) {
-          console.warn("Błąd pobierania EPG:", urlsToFetch[i], err);
+          window.appendAppLog(`EPG_FETCH_ERR: ${urlsToFetch[i]} -> ${err.message}`);
         }
       }
 
@@ -1442,13 +1529,14 @@
         const channels = parseM3U(text, 1);
         if (channels.length > 0) {
           allChannels = channels;
-          localStorage.setItem("webos_iptv_channels_v7", JSON.stringify(allChannels));
+          localStorage.setItem("webos_iptv_channels_v8", JSON.stringify(allChannels));
+          window.appendAppLog(`M3U_LOADED: ${channels.length} channels from ${url}`);
           return true;
         }
       } catch (e) {
-        console.warn("Błąd pobierania M3U:", e);
+        window.appendAppLog(`M3U_ERROR: ${e.message}`);
         if (showProgress) {
-          showStatus("Błąd pobierania listy M3U: " + e.message, false);
+          showStatus("Błąd M3U: " + e.message, false);
           await new Promise(r => setTimeout(r, 2500));
         }
       } finally {
@@ -1461,19 +1549,19 @@
       loadFavorites();
       loadBuiltinEpgConfig();
 
-      const savedM3uUrl = localStorage.getItem("webos_iptv_m3u_url_v7");
+      const savedM3uUrl = localStorage.getItem("webos_iptv_m3u_url_v8");
       const activeM3uUrl = savedM3uUrl !== null ? savedM3uUrl : DEFAULT_M3U_URL;
       document.getElementById("m3u-url-input").value = activeM3uUrl;
 
-      const savedEpgUrls = localStorage.getItem("webos_iptv_epg_urls_v7");
+      const savedEpgUrls = localStorage.getItem("webos_iptv_epg_urls_v8");
       if (savedEpgUrls) document.getElementById("epg-urls-textarea").value = savedEpgUrls;
 
-      const savedEpg = localStorage.getItem("webos_iptv_epg_v7");
+      const savedEpg = localStorage.getItem("webos_iptv_epg_v8");
       if (savedEpg) {
         try { epgDatabase = JSON.parse(savedEpg); } catch (e) { epgDatabase = {}; }
       }
 
-      const savedChannels = localStorage.getItem("webos_iptv_channels_v7");
+      const savedChannels = localStorage.getItem("webos_iptv_channels_v8");
       if (savedChannels) {
         try { allChannels = JSON.parse(savedChannels); } catch (e) { allChannels = []; }
       }
@@ -1514,17 +1602,18 @@
     window.showOsdToast = function(text) {
       const toast = document.getElementById("osd-toast");
       toast.textContent = text;
-      positionBottomMsgs();
-      fadeInEl(toast);
+      toast.style.display = "block";
       clearTimeout(toastTimeout);
-      toastTimeout = setTimeout(() => fadeOutEl(toast), 2400);
+      toastTimeout = setTimeout(() => {
+        toast.style.display = "none";
+      }, 2400);
     };
 
     function cycleAspectRatio() {
       currentAspectIdx = (currentAspectIdx + 1) % ASPECT_MODES.length;
       const modeObj = ASPECT_MODES[currentAspectIdx];
       applyAspectRatioMode(modeObj.id);
-      showOsdToast(`Proporcje obrazu: ${modeObj.label}`);
+      showOsdToast(`Proporcje: ${modeObj.label}`);
     }
 
     function applyAspectRatioMode(modeId) {
@@ -1691,7 +1780,7 @@
 
     function updateEpgStatsUI() {
       const uniqueKeys = Object.keys(epgDatabase).length;
-      document.getElementById("epg-db-stats").textContent = `Załadowane wpisy kanałów w bazie EPG: ${uniqueKeys}`;
+      document.getElementById("epg-db-stats").textContent = `Załadowane wpisy EPG: ${uniqueKeys}`;
     }
 
     function getChannelPrograms(ch) {
@@ -1715,7 +1804,6 @@
         return { cur, nxt, progress, fromPlaylist: false };
       }
 
-      // Fallback na informacje EPG / metadane z samej listy IPTV (#EXTINF / tvg-name / catchup)
       if (ch.iptvEpgTitle || ch.catchupDays > 0) {
         const fallbackTitle = ch.iptvEpgTitle
           ? ch.iptvEpgTitle
@@ -1812,7 +1900,7 @@
       const currentChannel = allChannels[currentPlayingIndex];
 
       if (filteredChannels.length === 0) {
-        cardsTrackEl.innerHTML = `<div style="color: var(--text-muted); padding: 30px 10px; font-size: 16px;">Brak kanałów w tej zakładce. Naciśnij przycisk <b>F</b> (lub otwórz <b>🔊 Opcje / Audio</b>), aby dodać aktualny kanał do <b>★ Ulubionych</b>.</div>`;
+        cardsTrackEl.innerHTML = `<div style="color: var(--text-muted); padding: 30px 10px; font-size: 16px;">Brak kanałów w tej zakładce. Naciśnij <b>F</b> (lub otwórz <b>🔊 Opcje / Audio</b>), aby dodać aktualny kanał do <b>★ Ulubionych</b>.</div>`;
         return;
       }
 
@@ -1916,6 +2004,7 @@
     }
 
     function playStreamUrl(streamUrl, label) {
+      window.appendAppLog(`PLAY: ${label} -> ${streamUrl}`);
       showStatus(`Ładowanie: ${label}...`);
 
       if (isNativeAndroid && window.AndroidPlayer.playStream) {
@@ -1938,13 +2027,14 @@
         });
         hlsInstance.on(Hls.Events.ERROR, (event, data) => {
           if (data.fatal) {
+            window.appendAppLog(`HLS_FATAL_ERROR: ${data.details}`);
             showStatus(`Błąd strumienia (${label})`, false);
           }
         });
       } else {
         videoEl.src = streamUrl;
         videoEl.onloadeddata = () => hideStatus();
-        videoEl.onerror = () => showStatus(`Format obsłuży ExoPlayer na Minixie`, false);
+        videoEl.onerror = () => showStatus(`Format obsługuje ExoPlayer`, false);
         videoEl.play().catch(() => {});
       }
     }
@@ -2028,7 +2118,7 @@
       if (isLauncherOpen) hideLauncher();
 
       bottomInfoBarEl.classList.add("visible");
-      showClock();
+      clockEl.classList.add("visible");
 
       clearTimeout(bannerTimeout);
       bannerTimeout = setTimeout(() => {
@@ -2042,8 +2132,6 @@
       clearTimeout(bannerTimeout);
     }
 
-    // Gdy brak zewnętrznego XMLTV, a kanał z listy IPTV obsługuje timeshift (np. timeshift="3"),
-    // generujemy bloki 1-godzinne z ostatnich 3 dni, aby nadal dało się cofnąć audycję w archiwum listy IPTV!
     function buildSyntheticIptvArchiveDays(channel) {
       const daysCount = Math.min(7, Math.max(1, Number(channel.catchupDays) || 3));
       const today = new Date();
@@ -2103,7 +2191,6 @@
         .filter(([dayKey]) => dayKey >= sevenDaysAgoStart)
         .sort((a, b) => a[0] - b[0]);
 
-      // Jeśli zewnętrzne EPG jest wyłączone lub nie ma wpisów, a lista IPTV obsługuje timeshift -> generujemy bloki archiwum z listy IPTV
       if (epgDaysList.length === 0 && hasCatchup) {
         epgDaysList = buildSyntheticIptvArchiveDays(channel);
       }
@@ -2113,7 +2200,7 @@
 
       renderEpgDaysAndList(true);
       epgDrawerEl.classList.add("visible");
-      showClock();
+      clockEl.classList.add("visible");
     }
 
     function closeEpgDrawer() {
@@ -2216,7 +2303,7 @@
       hideBottomInfoBar();
       isLauncherOpen = true;
       launcherEl.classList.add("visible");
-      showClock();
+      clockEl.classList.add("visible");
       showControlsHint(5200);
       resetLauncherAutoHide();
     }
@@ -2299,7 +2386,6 @@
         return;
       }
 
-      // Klawisz F -> Dodaj / Usuń z Ulubionych (aktualnie podświetlony na pasku lub aktualnie odtwarzany kanał)
       if (e.key.toLowerCase() === "f") {
         e.preventDefault();
         const targetCh = (isLauncherOpen && focusZone === "cards" && filteredChannels[focusedCardIndex])
@@ -2506,9 +2592,9 @@
       }
     });
 
-    // Parser M3U z obsługą url-tvg / x-tvg-url w nagłówku #EXTM3U oraz #EXTGRP / timeshift
     function parseM3U(content, startCounter = 1) {
-      const lines = content.split(/\r?\n/);
+      const lines = content.split(/?
+/);
       const parsed = [];
       let currentMeta = null;
       let counter = startCounter;
@@ -2542,7 +2628,6 @@
           const title = commaIdx !== -1 ? line.substring(commaIdx + 1).trim() : `Kanał ${counter}`;
           const tsDays = catchupDaysMatch ? parseInt(catchupDaysMatch[1], 10) : 0;
 
-          // Jeśli w #EXTINF podano inny tvg-name niż nazwa po przecinku, zachowujemy go jako opis programu z listy IPTV
           const rawTvgName = tvgNameMatch ? tvgNameMatch[1].trim() : "";
           const iptvEpgTitle = (rawTvgName && rawTvgName.toLowerCase() !== title.toLowerCase()) ? rawTvgName : "";
 
@@ -2640,7 +2725,7 @@
 
     function saveEpgToStorageSafe() {
       try {
-        localStorage.setItem("webos_iptv_epg_v7", JSON.stringify(epgDatabase));
+        localStorage.setItem("webos_iptv_epg_v8", JSON.stringify(epgDatabase));
       } catch (err) {}
     }
 
@@ -2661,9 +2746,18 @@
 
     document.getElementById("btn-close-modal").onclick = closeSettingsModal;
 
+    document.getElementById("btn-open-logs").onclick = () => {
+      document.getElementById("logs-modal").classList.add("visible");
+      const ta = document.getElementById("logs-textarea");
+      if (ta) {
+        ta.value = appLogsList.join("\n");
+        ta.scrollTop = ta.scrollHeight;
+      }
+    };
+
     document.getElementById("btn-clear-epg").onclick = () => {
       epgDatabase = {};
-      localStorage.removeItem("webos_iptv_epg_v7");
+      localStorage.removeItem("webos_iptv_epg_v8");
       updateEpgStatsUI();
       renderCards();
       showOsdToast("Wyczyszczono pamięć EPG");
@@ -2671,7 +2765,7 @@
 
     document.getElementById("btn-restore-default-m3u").onclick = async () => {
       document.getElementById("m3u-url-input").value = DEFAULT_M3U_URL;
-      localStorage.setItem("webos_iptv_m3u_url_v7", DEFAULT_M3U_URL);
+      localStorage.setItem("webos_iptv_m3u_url_v8", DEFAULT_M3U_URL);
       const ok = await loadM3uFromUrl(DEFAULT_M3U_URL, true);
       if (ok) {
         activeCategoryIndex = 0;
@@ -2684,7 +2778,7 @@
 
     document.getElementById("btn-load-url").onclick = async () => {
       const m3uUrl = document.getElementById("m3u-url-input").value.trim();
-      localStorage.setItem("webos_iptv_m3u_url_v7", m3uUrl);
+      localStorage.setItem("webos_iptv_m3u_url_v8", m3uUrl);
 
       try {
         if (m3uUrl) {
@@ -2699,6 +2793,7 @@
         playLiveChannel(0);
         closeSettingsModal();
       } catch (err) {
+        window.appendAppLog(`LOAD_URL_ERR: ${err.message}`);
         alert("Błąd pobierania danych.");
       } finally {
         hideStatus();
@@ -2722,7 +2817,7 @@
 
       if (combinedChannels.length > 0) {
         allChannels = combinedChannels;
-        localStorage.setItem("webos_iptv_channels_v7", JSON.stringify(allChannels));
+        localStorage.setItem("webos_iptv_channels_v8", JSON.stringify(allChannels));
         activeCategoryIndex = 0;
         rebuildCategories();
         filterChannelsByCategory(0);

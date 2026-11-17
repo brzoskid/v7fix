@@ -1,8 +1,7 @@
-# webOS IPTV Player dla Minix NEO-U1 (v7)
+# webOS IPTV Player dla Minix NEO-U1 (v8)
 
-## Najważniejsze zmiany w wersji 7.0
-- **Automatyczna obsługa BehindLiveWindowException:** Wyeliminowano zatrzymywanie odtwarzacza przy chwilowych przycięciach lub przesunięciach strumienia na żywo — odtwarzacz samoczynnie doskakuje do aktualnej krawędzi transmisji (Live Edge).
-- **Poprawiony kod w MainActivity.java (`sanitizeForJs`):** Usunięto błędy składniowe w eskejpowaniu znaków dla JavaScript.
-- **Dekoder FFmpeg dla AC3 / MP2 / MPG:** Płynne odtwarzanie dźwięku na wszystkich kanałach z wielokanałowym lub nietypowym kodowaniem.
-- **Funkcja Ulubione kanały (`★ Ulubione`)** z obsługą klawisza **`F`**.
-- **Automatyczny fallback na EPG z listy IPTV** po wyłączeniu zewnętrznego przewodnik.
+## Nowości i naprawy w wersji 8.0
+- **Eliminacja zawieszania się (Crash):** Dodano kompleksowy system globalnego przechwytywania wyjątków JavaScript oraz logowania błędów (`window.appendAppLog`).
+- **Kafelek i okno „Logi i Diagnostyka” w ustawieniacz:** Przycisk w menu Ustawień otwierający podgląd błędów dekodowania, wykrzykników ExoPlayera, statusów HTTP oraz żądań sieciowych z możliwością skopiowania do schowka.
+- **Błyskawiczny start strumienia (Bufor startowy skrócony do 1.5s):** Wyeliminowano 20-sekundowe mrożenie pierwszej klatki po przełączeniu kanału na Amlogic S905.
+- **Pełne wsparcie dla dekodera FFmpeg (AC3 / MP2 / MPG)**, ulubionych pod klawiszem **`F`** oraz EPG z listy IPTV.

@@ -10,8 +10,8 @@ android {
         applicationId "pl.brzoskid.webosiptv"
         minSdk 21
         targetSdk 29
-        versionCode 7
-        versionName "7.0"
+        versionCode 8
+        versionName "8.0"
         multiDexEnabled true
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
@@ -34,8 +34,8 @@ android {
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.4.2'
     implementation 'androidx.multidex:multidex:2.0.1'
-    implementation 'com.google.android.exoplayer:exoplayer-core:2.15.1'
-    implementation 'com.google.android.exoplayer:exoplayer-hls:2.15.1'
-    implementation 'com.google.android.exoplayer:exoplayer-ui:2.15.1'
-    implementation 'org.jellyfin.exoplayer:exoplayer-ffmpeg-extension:2.15.1+1'
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.13.3'
+    implementation 'com.google.android.exoplayer:exoplayer-hls:2.13.3'
+    implementation 'com.google.android.exoplayer:exoplayer-ui:2.13.3'
+    implementation 'org.jellyfin.exoplayer:exoplayer-ffmpeg-extension:2.13.3+1'
 }
