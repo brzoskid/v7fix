@@ -221,10 +221,10 @@ public class MainActivity extends AppCompatActivity {
 
         player.addListener(new Player.EventListener() {
             @Override
-            public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_READY) {
+            public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
+                if (playbackState == Player.STATE_READY) {
                     notifyJs("window.onNativePlayerReady && window.onNativePlayerReady()");
-                } else if (state == Player.STATE_BUFFERING) {
+                } else if (playbackState == Player.STATE_BUFFERING) {
                     notifyJs("window.onNativePlayerBuffering && window.onNativePlayerBuffering()");
                 }
             }
